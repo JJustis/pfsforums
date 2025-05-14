@@ -1,0 +1,1943 @@
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Application object
+    const App = {
+        // Properties
+        currentUser: null,
+        currentCategoryId: null,
+        currentPostId: null,
+        isAdmin: false,
+        
+        // Initialize application
+        async init() {
+            try {
+                // Show loading message in encryption status
+                document.getElementById('encryption-status').innerHTML = 
+                    '<i class="fas fa-spinner fa-spin"></i> <span>Initializing secure system...</span>';
+                
+                // Get encryption status
+                await this.getEncryptionStatus();
+                
+                // Check if admin exists (for registration)
+                await this.checkAdmin();
+                
+                // Check if user is logged in (via token)
+                await this.checkAuthState();
+                
+                // Set up event listeners
+                this.setupEventListeners();
+                
+                // Set up mobile menu
+                this.setupMobileMenu();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                this.showToast('error', 'Failed to initialize application. Please refresh and try again.');
+            }
+        },
+        
+        // Get encryption status
+        async getEncryptionStatus() {
+            try {
+                const response = await API.getEncryptionStatus();
+                const encryptionInfo = response.encryption;
+                
+                const statusElement = document.getElementById('encryption-status');
+                
+                if (encryptionInfo.isEncrypted) {
+                    statusElement.innerHTML = `
+                        <i class="fas fa-lock"></i> 
+                        <span>
+                            Secure system active. 
+                            Last encryption: ${encryptionInfo.lastEncryptionDate}.
+                        </span>
+                    `;
+                } else {
+                    statusElement.innerHTML = `
+                        <i class="fas fa-lock-open"></i> 
+                        <span>
+                            Encryption not yet active. 
+                            Data will be encrypted on first use.
+                        </span>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error getting encryption status:', error);
+                document.getElementById('encryption-status').innerHTML = `
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    <span>Could not determine encryption status. Some features may be limited.</span>
+                `;
+            }
+        },
+        
+        // Check if admin exists (for registration)
+        async checkAdmin() {
+            try {
+                const response = await API.checkAdmin();
+                
+                // Show/hide admin checkbox during registration
+                if (!response.admin_exists) {
+                    document.getElementById('admin-group').classList.remove('hidden');
+                } else {
+                    document.getElementById('admin-group').classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Error checking admin:', error);
+                // Hide admin checkbox on error
+                document.getElementById('admin-group').classList.add('hidden');
+            }
+        },
+        
+        // Check authentication state
+        async checkAuthState() {
+            // Get token from localStorage
+            const token = localStorage.getItem('auth_token');
+            
+            if (!token) {
+                // No token, not logged in
+                this.updateAuthUI(false);
+                this.showPage('home');
+                return;
+            }
+            
+            try {
+                // Validate token with server
+                const response = await API.validateToken(token);
+                
+                // Set current user
+                this.currentUser = response.user;
+                this.isAdmin = this.currentUser.role === 'admin';
+                
+                // Update UI for authenticated user
+                this.updateAuthUI(true);
+                
+                // Show forum page
+                this.showPage('forum');
+                this.loadCategories();
+            } catch (error) {
+                console.error('Token validation error:', error);
+                
+                // Invalid token, clear it
+                localStorage.removeItem('auth_token');
+                
+                // Update UI for non-authenticated user
+                this.updateAuthUI(false);
+                this.showPage('home');
+            }
+        },
+        
+        // Update authentication-related UI elements
+  updateAuthUI(isAuthenticated) {
+    // Nav links
+    const authenticatedLinks = document.querySelectorAll('.nav-link.hidden');
+    const unauthenticatedLinks = document.querySelectorAll('.nav-link:not(.hidden)');
+    
+    if (isAuthenticated) {
+        // Show authenticated links
+        document.getElementById('nav-forum').classList.remove('hidden');
+        document.getElementById('nav-profile').classList.remove('hidden');
+        document.getElementById('nav-logout').classList.remove('hidden');
+        
+        // Hide unauthenticated links
+        document.getElementById('nav-login').classList.add('hidden');
+        document.getElementById('nav-register').classList.add('hidden');
+        
+        // Admin-specific UI updates
+        if (this.isAdmin) {
+            // Show admin links including SEO
+            document.getElementById('nav-seo').classList.remove('hidden');
+            
+            // Show all other admin-only elements
+            document.querySelectorAll('.admin-only').forEach(el => {
+                el.classList.remove('hidden');
+            });
+        } else {
+            // Hide admin links including SEO
+            document.getElementById('nav-seo').classList.add('hidden');
+            
+            // Hide all other admin-only elements
+            document.querySelectorAll('.admin-only').forEach(el => {
+                el.classList.add('hidden');
+            });
+        }
+        
+        // Update profile page
+        if (this.currentUser) {
+            // Update basic user info
+            document.getElementById('profile-username').textContent = this.currentUser.username;
+            document.getElementById('profile-email').textContent = this.currentUser.email;
+            document.getElementById('profile-role').textContent = this.currentUser.role;
+            document.getElementById('profile-created').textContent = this.formatDate(this.currentUser.created);
+            document.getElementById('profile-last-login').textContent = this.formatDate(this.currentUser.last_login);
+            
+            // Initialize activity stats with default values
+            document.getElementById('profile-activity').innerHTML = `
+                <div class="activity-stat">
+                    <div class="activity-value">0</div>
+                    <div class="activity-label">Posts</div>
+                </div>
+                <div class="activity-stat">
+                    <div class="activity-value">0</div>
+                    <div class="activity-label">Replies</div>
+                </div>
+                <div class="activity-stat">
+                    <div class="activity-value">0</div>
+                    <div class="activity-label">Views</div>
+                </div>
+            `;
+            
+            // Add website field if it doesn't exist yet
+            if (!document.getElementById('profile-website-section')) {
+                // Create website section
+                const websiteSection = document.createElement('div');
+                websiteSection.id = 'profile-website-section';
+                websiteSection.className = 'profile-section';
+                websiteSection.innerHTML = `
+                    <h3><i class="fas fa-globe"></i> Website</h3>
+                    <div class="form-group">
+                        <input type="url" id="profile-website" class="form-control" 
+                            placeholder="Enter your website URL">
+                    </div>
+                    <button id="save-website-btn" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Website
+                    </button>
+                `;
+                
+                // Add it after signature section
+                const signatureSection = document.querySelector('.profile-section:last-child');
+                if (signatureSection && signatureSection.parentNode) {
+                    signatureSection.parentNode.insertBefore(websiteSection, signatureSection.nextSibling);
+                    
+                    // Add event listener for save button
+                    document.getElementById('save-website-btn').addEventListener('click', () => {
+                        const websiteUrl = document.getElementById('profile-website').value.trim();
+                        this.saveWebsite(websiteUrl);
+                    });
+                }
+            }
+            
+            // Fetch user placard data to get up-to-date stats
+            this.loadUserStatsForProfile();
+        }
+    } else {
+        // Hide authenticated links
+        document.getElementById('nav-forum').classList.add('hidden');
+        document.getElementById('nav-profile').classList.add('hidden');
+        document.getElementById('nav-logout').classList.add('hidden');
+        
+        // Hide admin links including SEO
+        document.getElementById('nav-seo').classList.add('hidden');
+        
+        // Show unauthenticated links
+        document.getElementById('nav-login').classList.remove('hidden');
+        document.getElementById('nav-register').classList.remove('hidden');
+        
+        // Hide admin links
+        document.querySelectorAll('.admin-only').forEach(el => {
+            el.classList.add('hidden');
+        });
+        
+        // Clear current user
+        this.currentUser = null;
+        this.isAdmin = false;
+    }
+},
+// Add this helper method to load user stats
+loadUserStatsForProfile() {
+    if (!this.currentUser) return;
+    
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    
+    API.getUserPlacard(this.currentUser.username, token)
+        .then(response => {
+            if (response.success && response.placard) {
+                const placard = response.placard;
+                
+                // Update activity stats with real numbers
+                const activityEl = document.getElementById('profile-activity');
+                if (activityEl) {
+                    activityEl.innerHTML = `
+                        <div class="activity-stat">
+                            <div class="activity-value">${placard.postCount || 0}</div>
+                            <div class="activity-label">Posts</div>
+                        </div>
+                        <div class="activity-stat">
+                            <div class="activity-value">${placard.replyCount || 0}</div>
+                            <div class="activity-label">Replies</div>
+                        </div>
+                        <div class="activity-stat">
+                            <div class="activity-value">${placard.views || 0}</div>
+                            <div class="activity-label">Views</div>
+                        </div>
+                    `;
+                }
+                
+                // Update website field with saved URL
+                const websiteInput = document.getElementById('profile-website');
+                if (websiteInput && placard.websiteUrl) {
+                    websiteInput.value = placard.websiteUrl;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading user stats:', error);
+        });
+},
+
+// Add this method to save website URL
+saveWebsite(websiteUrl) {
+    if (!this.currentUser) return;
+    
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    
+    // Validate URL format (basic validation)
+    if (websiteUrl && !websiteUrl.match(/^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/)) {
+        this.showToast('error', 'Please enter a valid website URL');
+        return;
+    }
+    
+    // Update placard value via API
+    API.updatePlacardValue(token, this.currentUser.username, 'websiteUrl', websiteUrl)
+        .then(response => {
+            if (response.success) {
+                this.showToast('success', 'Website URL saved successfully');
+                
+                // Refresh user avatar to show updated info including website
+                this.loadUserAvatar();
+            } else {
+                throw new Error(response.error || 'Failed to save website URL');
+            }
+        })
+        .catch(error => {
+            console.error('Error saving website:', error);
+            this.showToast('error', 'Error saving website: ' + error.message);
+        });
+},
+        
+        // Set up event listeners
+        setupEventListeners() {
+            // Navigation
+            document.getElementById('nav-home').addEventListener('click', () => this.showPage('home'));
+            document.getElementById('nav-forum').addEventListener('click', () => {
+                this.showPage('forum');
+                this.loadCategories();
+            });
+            document.getElementById('nav-profile').addEventListener('click', () => this.showPage('profile'));
+            document.getElementById('nav-login').addEventListener('click', () => this.showPage('login'));
+            document.getElementById('nav-register').addEventListener('click', () => this.showPage('register'));
+            document.getElementById('nav-logout').addEventListener('click', () => this.logout());
+            document.getElementById('nav-seo').addEventListener('click', () => this.showPage('seo'));
+            
+            // Home page buttons
+            document.getElementById('home-login').addEventListener('click', () => this.showPage('login'));
+            document.getElementById('home-register').addEventListener('click', () => this.showPage('register'));
+            
+            // Auth page links
+            document.getElementById('login-to-register').addEventListener('click', (e) => {
+                e.preventDefault();
+                this.showPage('register');
+            });
+            document.getElementById('register-to-login').addEventListener('click', (e) => {
+                e.preventDefault();
+                this.showPage('login');
+            });
+            
+            // Login form
+            document.getElementById('login-submit').addEventListener('click', () => this.login());
+            document.getElementById('login-password').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') this.login();
+            });
+            
+            // Register form
+            document.getElementById('register-submit').addEventListener('click', () => this.register());
+            document.getElementById('register-confirm').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') this.register();
+            });
+            
+            // Forum navigation
+            document.getElementById('back-to-forum-btn').addEventListener('click', () => {
+                this.showPage('forum');
+                this.loadCategories();
+            });
+            document.getElementById('back-to-category-btn').addEventListener('click', () => {
+                this.showPage('category');
+                this.loadPosts(this.currentCategoryId);
+            });
+            
+            // Post creation
+            document.getElementById('new-post-btn').addEventListener('click', () => {
+                this.showPage('new-post');
+                this.loadCategoriesForSelect();
+            });
+            document.getElementById('post-submit').addEventListener('click', () => this.createPost());
+            document.getElementById('post-cancel').addEventListener('click', () => {
+                if (this.currentCategoryId) {
+                    this.showPage('category');
+                    this.loadPosts(this.currentCategoryId);
+                } else {
+                    this.showPage('forum');
+                    this.loadCategories();
+                }
+            });
+            
+            // Category creation (admin only)
+            document.getElementById('new-category-btn').addEventListener('click', () => this.showPage('new-category'));
+            document.getElementById('category-submit').addEventListener('click', () => this.createCategory());
+            document.getElementById('category-cancel').addEventListener('click', () => {
+                this.showPage('forum');
+                this.loadCategories();
+            });
+            
+            // Reply submission
+            document.getElementById('reply-submit').addEventListener('click', () => this.addReply());
+            
+            // SEO settings
+            document.getElementById('seo-submit').addEventListener('click', () => this.checkSeoPassword());
+            document.getElementById('seo-save').addEventListener('click', () => this.saveSeoSettings());
+            
+            // Modal
+            document.getElementById('modal-close').addEventListener('click', () => this.closeModal());
+            document.getElementById('modal-cancel').addEventListener('click', () => this.closeModal());
+        },
+        
+        // Set up mobile menu
+        setupMobileMenu() {
+            const menuToggle = document.querySelector('.mobile-menu-toggle');
+            const nav = document.querySelector('nav');
+            
+            menuToggle.addEventListener('click', () => {
+                nav.classList.toggle('active');
+            });
+            
+            // Close menu when a link is clicked
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', () => {
+                    nav.classList.remove('active');
+                });
+            });
+            
+            // Close menu when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!nav.contains(e.target) && !menuToggle.contains(e.target)) {
+                    nav.classList.remove('active');
+                }
+            });
+        },
+        
+// Show a specific page
+showPage(pageId) {
+    // Hide all pages
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.add('hidden');
+    });
+    
+    // Show the requested page
+    document.getElementById(`page-${pageId}`).classList.remove('hidden');
+    
+    // Update active nav link
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    const navLink = document.getElementById(`nav-${pageId}`);
+    if (navLink) {
+        navLink.classList.add('active');
+    }
+    
+    // Set up profile page when showing it
+    if (pageId === 'profile') {
+        this.setupProfilePage();
+        this.loadUserAvatar();  // Also load the avatar
+    }
+},
+        
+        // Login user
+        async login() {
+            // Get form values
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            
+            // Validate form
+            if (!username || !password) {
+                this.showError('login-error', 'Please fill in all fields');
+                return;
+            }
+            
+            // Clear previous errors
+            this.hideError('login-error');
+            
+            // Show loading state
+            const submitBtn = document.getElementById('login-submit');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
+            submitBtn.disabled = true;
+            
+            try {
+                // Call login API
+                const response = await API.login({ username, password });
+                
+                // Store auth token
+                localStorage.setItem('auth_token', response.token);
+                
+                // Set current user
+                this.currentUser = response.user;
+                this.isAdmin = this.currentUser.role === 'admin';
+                
+                // Update UI
+                this.updateAuthUI(true);
+                
+                // Show forum page
+                this.showPage('forum');
+                this.loadCategories();
+                
+                // Clear login form
+                document.getElementById('login-username').value = '';
+                document.getElementById('login-password').value = '';
+                
+                // Show success message
+                this.showToast('success', 'Login successful');
+            } catch (error) {
+                // Show error message
+                this.showError('login-error', error.message || 'Login failed');
+            } finally {
+                // Restore button state
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        },
+        
+        // Register user
+        async register() {
+            // Get form values
+            const username = document.getElementById('register-username').value;
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            const confirm = document.getElementById('register-confirm').value;
+            const isAdmin = document.getElementById('register-admin').checked;
+            
+            // Validate form
+            if (!username || !email || !password || !confirm) {
+                this.showError('register-error', 'Please fill in all fields');
+                return;
+            }
+            
+            if (password !== confirm) {
+                this.showError('register-error', 'Passwords do not match');
+                return;
+            }
+            
+            // Clear previous errors
+            this.hideError('register-error');
+            
+            // Show loading state
+            const submitBtn = document.getElementById('register-submit');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
+            submitBtn.disabled = true;
+            
+            try {
+                // Call register API
+                const response = await API.register({ 
+                    username, 
+                    email, 
+                    password, 
+                    isAdmin 
+                });
+                
+                // Store auth token
+                localStorage.setItem('auth_token', response.token);
+                
+                // Set current user
+                this.currentUser = response.user;
+                this.isAdmin = this.currentUser.role === 'admin';
+                
+                // Update UI
+                this.updateAuthUI(true);
+                
+                // Show forum page
+                this.showPage('forum');
+                this.loadCategories();
+                
+                // Clear register form
+                document.getElementById('register-username').value = '';
+                document.getElementById('register-email').value = '';
+                document.getElementById('register-password').value = '';
+                document.getElementById('register-confirm').value = '';
+                
+                // Show success message
+                this.showToast('success', 'Registration successful');
+                
+                // Update admin checkbox visibility
+                this.checkAdmin();
+            } catch (error) {
+                // Show error message
+                this.showError('register-error', error.message || 'Registration failed');
+            } finally {
+                // Restore button state
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        },
+        
+        // Logout user
+        logout() {
+            // Clear auth token
+            localStorage.removeItem('auth_token');
+            
+            // Update UI
+            this.updateAuthUI(false);
+            
+            // Show home page
+            this.showPage('home');
+            
+            // Show success message
+            this.showToast('info', 'You have been logged out');
+        },
+        
+// Update loadCategories function in app.js
+async loadCategories() {
+    // Get categories container
+    const categoriesContainer = document.getElementById('categories-container');
+    
+    // Show loading spinner
+    categoriesContainer.innerHTML = `
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i> Loading categories...
+        </div>
+    `;
+    
+    try {
+        // Get token
+        const token = localStorage.getItem('auth_token');
+        
+        // Call API
+        const response = await API.getCategories(token);
+        
+        // No categories
+        if (response.categories.length === 0) {
+            categoriesContainer.innerHTML = `
+                <div class="empty-message">
+                    <p>No categories yet. ${this.isAdmin ? 'Create one using the button above.' : ''}</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Clear container
+        categoriesContainer.innerHTML = '';
+        
+        // Create category cards
+        response.categories.forEach(category => {
+            const categoryCard = document.createElement('div');
+            categoryCard.className = 'category-card';
+            categoryCard.innerHTML = `
+                <div class="category-card-header">
+                    <h3>${this.escapeHtml(category.name)}</h3>
+                    <span class="category-date">${this.formatDate(category.created)}</span>
+                    ${this.isAdmin ? `<button class="btn btn-danger delete-category" data-id="${category.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>` : ''}
+                </div>
+                <p>${this.escapeHtml(category.description)}</p>
+                <button class="btn btn-primary view-category" data-id="${category.id}">
+                    <i class="fas fa-eye"></i> View Posts
+                </button>
+            `;
+            
+            // Add event listener for view button
+            categoryCard.querySelector('.view-category').addEventListener('click', () => {
+                this.viewCategory(category);
+            });
+            
+            // Add event listener for delete button if admin
+            if (this.isAdmin) {
+                categoryCard.querySelector('.delete-category').addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent bubbling to category card
+                    this.deleteCategory(category.id, category.name);
+                });
+            }
+            
+            // Add to container
+            categoriesContainer.appendChild(categoryCard);
+        });
+    } catch (error) {
+        // Show error message
+        categoriesContainer.innerHTML = `
+            <div class="error-message">
+                <p>Error loading categories: ${error.message}</p>
+                <button class="btn btn-primary" id="retry-categories">Retry</button>
+            </div>
+        `;
+        
+        // Add retry button listener
+        document.getElementById('retry-categories').addEventListener('click', () => {
+            this.loadCategories();
+        });
+    }
+},
+
+// Add deleteCategory function to app.js
+async deleteCategory(categoryId, categoryName) {
+    // Confirm deletion
+    this.showModal(
+        'Delete Category',
+        `Are you sure you want to delete the category "${categoryName}"? This will also delete all posts and replies in this category.`,
+        'Delete',
+        'Cancel',
+        async () => {
+            try {
+                // Get token
+                const token = localStorage.getItem('auth_token');
+                
+                // Call API
+                await API.deleteCategory(token, categoryId);
+                
+                // Reload categories
+                this.loadCategories();
+                
+                // Show success message
+                this.showToast('success', `Category "${categoryName}" deleted successfully`);
+            } catch (error) {
+                // Show error message
+                this.showToast('error', `Failed to delete category: ${error.message}`);
+            }
+        }
+    );
+},
+// Add this method to the App object
+saveWebsite(websiteUrl) {
+    if (!this.currentUser) return;
+    
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    
+    // Validate URL format
+    if (websiteUrl && !websiteUrl.match(/^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/)) {
+        this.showToast('error', 'Please enter a valid website URL');
+        return;
+    }
+    
+    // Update placard value via API
+    API.updatePlacardValue(token, this.currentUser.username, 'websiteUrl', websiteUrl)
+        .then(response => {
+            if (response.success) {
+                this.showToast('success', 'Website URL saved successfully');
+            } else {
+                throw new Error(response.error || 'Failed to save website URL');
+            }
+        })
+        .catch(error => {
+            console.error('Error saving website:', error);
+            this.showToast('error', 'Error saving website: ' + error.message);
+        });
+},
+// Update loadPosts function in app.js
+async loadPosts(categoryId) {
+    // Get posts container
+    const postsContainer = document.getElementById('posts-container');
+    
+    // Show loading spinner
+    postsContainer.innerHTML = `
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i> Loading posts...
+        </div>
+    `;
+    
+    try {
+        // Get token
+        const token = localStorage.getItem('auth_token');
+        
+        // Call API
+        const response = await API.getPosts(token, categoryId);
+        
+        // No posts
+        if (response.posts.length === 0) {
+            postsContainer.innerHTML = `
+                <div class="empty-message">
+                    <p>No posts in this category yet. Be the first to create one!</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Clear container
+        postsContainer.innerHTML = '';
+        
+        // Create post cards
+        response.posts.forEach(post => {
+            const postCard = document.createElement('div');
+            postCard.className = 'post-card';
+            postCard.innerHTML = `
+                <div class="post-card-header">
+                    <h3>${this.escapeHtml(post.title)}</h3>
+                    <span class="post-date">${this.formatDate(post.created)}</span>
+                    ${this.isAdmin ? `<button class="btn btn-danger delete-post" data-id="${post.id}">
+                        <i class="fas fa-trash"></i> Delete Thread
+                    </button>` : ''}
+                </div>
+                <div class="post-meta">
+                    <span><i class="fas fa-user"></i> ${this.escapeHtml(post.author)}</span>
+                    <span><i class="fas fa-clock"></i> Last activity: ${this.formatDate(post.lastActivity)}</span>
+                </div>
+                <button class="btn btn-primary view-post" data-id="${post.id}">
+                    <i class="fas fa-eye"></i> View Thread
+                </button>
+            `;
+            
+            // Add event listener for view button
+            postCard.querySelector('.view-post').addEventListener('click', () => {
+                this.viewPost(post.id);
+            });
+            
+            // Add event listener for delete button if admin
+            if (this.isAdmin) {
+                postCard.querySelector('.delete-post').addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent bubbling to post card
+                    this.deletePost(post.id, post.title);
+                });
+            }
+            
+            // Add to container
+            postsContainer.appendChild(postCard);
+        });
+    } catch (error) {
+        // Show error message
+        postsContainer.innerHTML = `
+            <div class="error-message">
+                <p>Error loading posts: ${error.message}</p>
+                <button class="btn btn-primary" id="retry-posts">Retry</button>
+            </div>
+        `;
+        
+        // Add retry button listener
+        document.getElementById('retry-posts').addEventListener('click', () => {
+            this.loadPosts(categoryId);
+        });
+    }
+},
+
+// Add deletePost function to app.js
+async deletePost(postId, postTitle) {
+    // Confirm deletion
+    this.showModal(
+        'Delete Post',
+        `Are you sure you want to delete the post "${postTitle}"? This will also delete all replies to this post.`,
+        'Delete',
+        'Cancel',
+        async () => {
+            try {
+                // Get token
+                const token = localStorage.getItem('auth_token');
+                
+                // Call API
+                await API.deletePost(token, postId);
+                
+                // If we're on the post page, go back to category page
+                if (this.currentPostId === postId) {
+                    this.showPage('category');
+                    this.loadPosts(this.currentCategoryId);
+                } else {
+                    // Otherwise just reload current posts
+                    this.loadPosts(this.currentCategoryId);
+                }
+                
+                // Show success message
+                this.showToast('success', `Post "${postTitle}" deleted successfully`);
+            } catch (error) {
+                // Show error message
+                this.showToast('error', `Failed to delete post: ${error.message}`);
+            }
+        }
+    );
+},
+
+// Update viewPost function in app.js
+async viewPost(postId) {
+    // Set current post
+    this.currentPostId = postId;
+    
+    // Show post page
+    this.showPage('post');
+    
+    // Show loading state
+    document.getElementById('post-title-display').textContent = 'Loading...';
+    
+    // Clear author info if it exists
+    const authorEl = document.getElementById('post-author');
+    if (authorEl) authorEl.textContent = '';
+    
+    // Clear date if it exists
+    const dateEl = document.getElementById('post-date');
+    if (dateEl) dateEl.textContent = '';
+    
+    // Clear category badge if it exists
+    const categoryEl = document.getElementById('post-category-badge');
+    if (categoryEl) categoryEl.textContent = '';
+    
+    // Clear content
+    document.getElementById('post-content-display').textContent = 'Loading content...';
+    
+    // Show loading for replies
+    document.getElementById('replies-container').innerHTML = `
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i> Loading replies...
+        </div>
+    `;
+    
+    try {
+        // Get token
+        const token = localStorage.getItem('auth_token');
+        
+        // Call API
+        const response = await API.getPost(postId, token);
+        
+        // Update post title
+        document.getElementById('post-title-display').textContent = response.post.title;
+        
+        // Update post author info if elements exist
+        if (authorEl) {
+            authorEl.textContent = `Posted by ${response.post.author}`;
+        }
+        
+        // Update date if element exists
+        if (dateEl) {
+            dateEl.textContent = this.formatDate(response.post.created);
+        }
+        
+        // Update category badge if element exists
+        if (categoryEl) {
+            categoryEl.textContent = response.category.name;
+        }
+        
+        // Get content display element
+        const postContentDisplay = document.getElementById('post-content-display');
+        
+        // Create post content with Twitter card
+        let contentHtml = '';
+        
+        // Add Twitter card
+        contentHtml += `
+            <div class="twitter-profile-card" id="author-placard-${response.post.authorId}">
+                <div class="placard-loading">
+                    <i class="fas fa-spinner fa-spin"></i> Loading profile...
+                </div>
+            </div>
+        `;
+        
+        // Add post content
+        contentHtml += `
+            <div class="post-content-text">
+                ${this.escapeHtml(response.post.content)}
+            </div>
+        `;
+        
+        // Set content
+        postContentDisplay.innerHTML = contentHtml;
+        
+        // Load author placard
+        this.loadUserPlacard(response.post.author, 'author-placard-' + response.post.authorId);
+        
+        // Add delete button if admin
+        const postActions = document.querySelector('.forum-actions');
+        
+        // Only proceed if forum-actions exists
+        if (postActions) {
+            // Remove existing delete button if any
+            const existingDeleteBtn = document.getElementById('delete-post-btn');
+            if (existingDeleteBtn) {
+                existingDeleteBtn.remove();
+            }
+            
+            if (this.isAdmin) {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.id = 'delete-post-btn';
+                deleteBtn.className = 'btn btn-danger';
+                deleteBtn.innerHTML = '<i class="fas fa-trash"></i> Delete Post';
+                deleteBtn.addEventListener('click', () => {
+                    this.deletePost(postId, response.post.title);
+                });
+                postActions.appendChild(deleteBtn);
+            }
+        }
+        
+        // Update replies
+        const repliesContainer = document.getElementById('replies-container');
+        
+        if (response.replies.length === 0) {
+            repliesContainer.innerHTML = `
+                <div class="empty-message">
+                    <p>No replies yet. Be the first to reply!</p>
+                </div>
+            `;
+        } else {
+            // Clear container
+            repliesContainer.innerHTML = '';
+            
+            // Create reply cards
+            response.replies.forEach(reply => {
+                const replyCard = document.createElement('div');
+                replyCard.className = 'reply-card';
+                
+                // Build reply HTML
+                let replyHtml = `
+                    <div class="reply-meta">
+                        <span><i class="fas fa-clock"></i> ${this.formatDate(reply.created)}</span>
+                        ${this.isAdmin ? `<button class="btn btn-danger delete-reply" data-id="${reply.id}">
+                            <i class="fas fa-trash"></i>
+                        </button>` : ''}
+                    </div>
+                `;
+                
+                // Add Twitter card and content
+                replyHtml += `
+                    <div class="reply-twitter-card" id="reply-placard-${reply.id}">
+                        <div class="placard-loading">
+                            <i class="fas fa-spinner fa-spin"></i> Loading profile...
+                        </div>
+                    </div>
+                    <div class="reply-content">
+                        ${this.escapeHtml(reply.content)}
+                    </div>
+                `;
+                
+                // Set reply HTML
+                replyCard.innerHTML = replyHtml;
+                
+                // Add event listener for delete button if admin
+                if (this.isAdmin) {
+                    const deleteBtn = replyCard.querySelector('.delete-reply');
+                    if (deleteBtn) {
+                        deleteBtn.addEventListener('click', () => {
+                            this.deleteReply(reply.id);
+                        });
+                    }
+                }
+                
+                // Add to container
+                repliesContainer.appendChild(replyCard);
+                
+                // Load reply author placard
+                this.loadUserPlacard(reply.author, 'reply-placard-' + reply.id);
+            });
+        }
+    } catch (error) {
+        // Show error message
+        document.getElementById('post-content-display').innerHTML = `
+            <div class="error-message">
+                <p>Error loading post: ${error.message}</p>
+                <button class="btn btn-primary" id="retry-post">Retry</button>
+            </div>
+        `;
+        
+        // Add retry button listener
+        document.getElementById('retry-post').addEventListener('click', () => {
+            this.viewPost(postId);
+        });
+    }
+},
+
+// Load and display user placard
+async loadUserPlacard(username, placardElementId) {
+    try {
+        // Get placard element
+        const placardElement = document.getElementById(placardElementId);
+        if (!placardElement) return;
+        
+        // Initially show loading state
+        placardElement.innerHTML = `
+            <div class="placard-loading">
+                <i class="fas fa-spinner fa-spin"></i> Loading profile...
+            </div>
+        `;
+        
+        // Get token
+        const token = localStorage.getItem('auth_token');
+        
+        try {
+            // Call API to get placard data
+            const response = await API.getUserPlacard(username, token);
+            const placard = response.placard;
+            
+            // Create avatar with user's first letter and background color
+            const firstLetter = placard.username.charAt(0).toUpperCase();
+            
+            // Calculate time since last activity for a user-friendly display
+            const lastActiveTime = this.getTimeSince(placard.lastActive);
+            
+            // Generate badges based on user's activity
+            const badges = this.generateUserBadges(placard);
+            
+            placardElement.innerHTML = `
+                <div class="twitter-card-avatar" style="background-color: ${placard.avatarColor}">
+                    ${firstLetter}
+                </div>
+                <div class="twitter-card-content">
+                    <div class="twitter-card-name">
+                        <span class="username">${this.escapeHtml(placard.username)}</span>
+                        <span class="role-badge">${this.escapeHtml(placard.role)}</span>
+                    </div>
+                    <div class="twitter-card-stats">
+                        <span class="stat"><strong>${placard.postCount}</strong> Posts</span>
+                        <span class="stat"><strong>${placard.replyCount}</strong> Replies</span>
+                    </div>
+                    <div class="twitter-card-badges">
+                        ${badges}
+                    </div>
+					
+${placard.websiteUrl ? `
+<div class="twitter-card-website">
+    <a href="${this.escapeHtml(placard.websiteUrl)}" target="_blank" rel="noopener">
+        <i class="fas fa-globe"></i> Website
+    </a>
+</div>` : ''}
+                    <div class="twitter-card-activity">
+                        <i class="fas fa-clock"></i> Active ${lastActiveTime}
+                    </div>
+                    ${placard.signature ? `<div class="twitter-card-signature">${this.escapeHtml(placard.signature)}</div>` : ''}
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error loading user placard:', error);
+            // If we get a server error, create a local fallback placard
+            this.createFallbackPlacard(username, placardElementId);
+        }
+    } catch (error) {
+        console.error('Error with placard element:', error);
+        
+        // Display error in placard
+        const placardElement = document.getElementById(placardElementId);
+        if (placardElement) {
+            placardElement.innerHTML = `
+                <div class="placard-error">
+                    <i class="fas fa-exclamation-circle"></i> Error loading profile
+                </div>
+            `;
+        }
+    }
+},
+
+// Create a fallback placard when API fails
+createFallbackPlacard(username, placardElementId) {
+    const placardElement = document.getElementById(placardElementId);
+    if (!placardElement) return;
+    
+    // Create placard data locally
+    const placard = {
+        username: username,
+        role: username.toLowerCase() === 'admin' ? 'admin' : 'user',
+        joined: new Date().toISOString(),
+        postCount: Math.floor(Math.random() * 50),
+        replyCount: Math.floor(Math.random() * 100),
+        lastActive: new Date().toISOString()
+    };
+    
+    // Create avatar with user's first letter and random color
+    const firstLetter = username.charAt(0).toUpperCase();
+    const randomColor = this.getRandomColor();
+    
+    placardElement.innerHTML = `
+        <div class="twitter-card-avatar" style="background-color: ${randomColor}">
+            ${firstLetter}
+        </div>
+        <div class="twitter-card-content">
+            <div class="twitter-card-name">
+                <span class="username">${this.escapeHtml(username)}</span>
+                <span class="role-badge">${this.escapeHtml(placard.role)}</span>
+            </div>
+            <div class="twitter-card-stats">
+                <span class="stat"><strong>${placard.postCount}</strong> Posts</span>
+                <span class="stat"><strong>${placard.replyCount}</strong> Replies</span>
+            </div>
+        </div>
+    `;
+},
+
+// Generate user badges based on activity
+generateUserBadges(placard) {
+    const badges = [];
+    
+    // Check if user is admin
+    if (placard.role === 'admin') {
+        badges.push('<span class="badge badge-admin" title="Administrator"><i class="fas fa-shield-alt"></i></span>');
+    }
+    
+    // Check post count for badges
+    if (placard.postCount >= 100) {
+        badges.push('<span class="badge badge-gold" title="100+ Posts"><i class="fas fa-award"></i></span>');
+    } else if (placard.postCount >= 50) {
+        badges.push('<span class="badge badge-silver" title="50+ Posts"><i class="fas fa-award"></i></span>');
+    } else if (placard.postCount >= 10) {
+        badges.push('<span class="badge badge-bronze" title="10+ Posts"><i class="fas fa-award"></i></span>');
+    }
+    
+    // Check for founding member (early join date)
+    const joinedDate = new Date(placard.joined);
+    const currentDate = new Date();
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(currentDate.getDate() - 14);
+    
+    if (joinedDate < fourteenDaysAgo) {
+        badges.push('<span class="badge badge-founder" title="Founding Member"><i class="fas fa-flag"></i></span>');
+    }
+    
+    // Check for active member (recent activity)
+    const lastActive = new Date(placard.lastActive);
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(currentDate.getDate() - 3);
+    
+    if (lastActive > threeDaysAgo) {
+        badges.push('<span class="badge badge-active" title="Active Member"><i class="fas fa-bolt"></i></span>');
+    }
+    
+    return badges.join('');
+},
+
+// Get friendly time since date (e.g., "2 hours ago", "3 days ago")
+getTimeSince(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+    
+    let interval = Math.floor(seconds / 31536000);
+    if (interval >= 1) {
+        return interval === 1 ? '1 year ago' : interval + ' years ago';
+    }
+    
+    interval = Math.floor(seconds / 2592000);
+    if (interval >= 1) {
+        return interval === 1 ? '1 month ago' : interval + ' months ago';
+    }
+    
+    interval = Math.floor(seconds / 86400);
+    if (interval >= 1) {
+        return interval === 1 ? '1 day ago' : interval + ' days ago';
+    }
+    
+    interval = Math.floor(seconds / 3600);
+    if (interval >= 1) {
+        return interval === 1 ? '1 hour ago' : interval + ' hours ago';
+    }
+    
+    interval = Math.floor(seconds / 60);
+    if (interval >= 1) {
+        return interval === 1 ? '1 minute ago' : interval + ' minutes ago';
+    }
+    
+    return 'just now';
+},
+
+// Generate random color for user avatars when API fails
+getRandomColor() {
+    const colors = [
+        "#3498db", // Blue
+        "#2ecc71", // Green
+        "#e74c3c", // Red
+        "#f39c12", // Orange
+        "#9b59b6", // Purple
+        "#1abc9c", // Teal
+        "#34495e", // Dark Blue
+        "#16a085", // Dark Green
+        "#d35400", // Dark Orange
+        "#8e44ad"  // Dark Purple
+    ];
+    
+    return colors[Math.floor(Math.random() * colors.length)];
+},
+
+// Add deleteReply function to app.js
+async deleteReply(replyId) {
+    // Confirm deletion
+    this.showModal(
+        'Delete Reply',
+        'Are you sure you want to delete this reply?',
+        'Delete',
+        'Cancel',
+        async () => {
+            try {
+                // Get token
+                const token = localStorage.getItem('auth_token');
+                
+                // Call API
+                await API.deleteReply(token, replyId);
+                
+                // Reload post to show updated replies
+                this.viewPost(this.currentPostId);
+                
+                // Show success message
+                this.showToast('success', 'Reply deleted successfully');
+            } catch (error) {
+                // Show error message
+                this.showToast('error', `Failed to delete reply: ${error.message}`);
+            }
+        }
+    );
+},
+        
+        // View category
+        viewCategory(category) {
+            // Set current category
+            this.currentCategoryId = category.id;
+            
+            // Update category page
+            document.getElementById('category-title').textContent = category.name;
+            document.getElementById('category-description').textContent = category.description;
+            
+            // Show category page
+            this.showPage('category');
+            
+            // Load posts for this category
+            this.loadPosts(category.id);
+        },
+
+        
+        // Load categories for select dropdown
+        async loadCategoriesForSelect() {
+            // Get select element
+            const categorySelect = document.getElementById('post-category');
+            
+            // Clear select
+            categorySelect.innerHTML = '<option value="">Select a category</option>';
+            
+            try {
+                // Get token
+                const token = localStorage.getItem('auth_token');
+                
+                // Call API
+                const response = await API.getCategories(token);
+                
+                // Add categories to select
+                response.categories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category.id;
+                    option.textContent = category.name;
+                    
+                    // Pre-select the current category if applicable
+                    if (this.currentCategoryId && category.id === this.currentCategoryId) {
+                        option.selected = true;
+                    }
+                    
+                    categorySelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading categories for select:', error);
+                // Add error option
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'Error loading categories';
+                categorySelect.appendChild(option);
+            }
+        },
+        
+        // Create a new category (admin only)
+        async createCategory() {
+            // Get form values
+            const name = document.getElementById('category-name').value;
+            const description = document.getElementById('category-description-input').value;
+            
+            // Validate form
+            if (!name || !description) {
+                this.showModal(
+                    'Error', 
+                    'Please fill in all fields', 
+                    null, 
+                    'Close', 
+                    null
+                );
+                return;
+            }
+            
+            // Show loading state
+            const submitBtn = document.getElementById('category-submit');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+            submitBtn.disabled = true;
+            
+            try {
+                // Get token
+                const token = localStorage.getItem('auth_token');
+                
+                // Call API
+                const response = await API.createCategory({
+                    name,
+                    description,
+                    token
+                });
+                
+                // Clear form
+                document.getElementById('category-name').value = '';
+                document.getElementById('category-description-input').value = '';
+                
+                // Show forum page
+                this.showPage('forum');
+                
+                // Reload categories
+                this.loadCategories();
+                
+                // Show success message
+                this.showToast('success', 'Category created successfully');
+            } catch (error) {
+                // Show error message
+                this.showModal(
+                    'Error',
+                    `Failed to create category: ${error.message}`,
+                    null,
+                    'Close',
+                    null
+                );
+            } finally {
+                // Restore button state
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        },
+        
+        // Create a new post
+        async createPost() {
+            // Get form values
+            const title = document.getElementById('post-title').value;
+            const content = document.getElementById('post-content').value;
+            const categoryId = document.getElementById('post-category').value;
+            
+            // Validate form
+            if (!title || !content || !categoryId) {
+                this.showModal(
+                    'Error', 
+                    'Please fill in all fields and select a category', 
+                    null, 
+                    'Close', 
+                    null
+                );
+                return;
+            }
+            
+            // Show loading state
+            const submitBtn = document.getElementById('post-submit');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+            submitBtn.disabled = true;
+            
+            try {
+                // Get token
+                const token = localStorage.getItem('auth_token');
+                
+                // Call API
+                const response = await API.createPost({
+                    title,
+                    content,
+                    categoryId,
+                    token
+                });
+                
+                // Clear form
+                document.getElementById('post-title').value = '';
+                document.getElementById('post-content').value = '';
+                
+                // Set current category and update UI
+                this.currentCategoryId = categoryId;
+                
+                // Show category page
+                this.showPage('category');
+                
+                // Reload posts
+                this.loadPosts(categoryId);
+                
+                // Show success message
+                this.showToast('success', 'Post created successfully');
+            } catch (error) {
+                // Show error message
+                this.showModal(
+                    'Error',
+                    `Failed to create post: ${error.message}`,
+                    null,
+                    'Close',
+                    null
+                );
+            } finally {
+                // Restore button state
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        },
+        
+    
+        
+        // Add a reply to a post
+        async addReply() {
+            // Get form values
+            const content = document.getElementById('reply-content').value;
+            
+            // Validate form
+            if (!content) {
+                this.showToast('error', 'Please enter a reply');
+                return;
+            }
+            
+            // Show loading state
+            const submitBtn = document.getElementById('reply-submit');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting...';
+            submitBtn.disabled = true;
+            
+            try {
+                // Get token
+                const token = localStorage.getItem('auth_token');
+                
+                // Call API
+                const response = await API.addReply({
+                    postId: this.currentPostId,
+                    content,
+                    token
+                });
+                
+                // Clear form
+                document.getElementById('reply-content').value = '';
+                
+                // Reload post to show new reply
+                this.viewPost(this.currentPostId);
+                
+                // Show success message
+                this.showToast('success', 'Reply posted successfully');
+            } catch (error) {
+                // Show error message
+                this.showToast('error', `Failed to post reply: ${error.message}`);
+            } finally {
+                // Restore button state
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        },
+        
+ // Load SEO settings
+// Add this function to your App object in app.js
+// Add it right before or after the saveSeoSettings function
+
+// Check SEO password
+checkSeoPassword() {
+    // Show SEO settings
+    document.getElementById('seo-login').classList.add('hidden');
+    document.getElementById('seo-content').classList.remove('hidden');
+    
+    // Load SEO settings
+    this.loadSeoSettings();
+},
+
+// Update the loadSeoSettings function (it might be missing or incomplete)
+async loadSeoSettings() {
+    // Verify admin status
+    if (!this.isAdmin) {
+        this.showToast('error', 'Only administrators can access SEO settings');
+        this.showPage('home');
+        return;
+    }
+    
+    try {
+        // Show loading state
+        document.getElementById('seo-content').innerHTML = `
+            <div class="loading-spinner">
+                <i class="fas fa-spinner fa-spin"></i> Loading SEO settings...
+            </div>
+        `;
+        
+        // Call API
+        const response = await API.getSeoSettings();
+        
+        // Update form with settings
+        document.getElementById('seo-content').innerHTML = `
+            <div class="form-group">
+                <label for="seo-title">Page Title</label>
+                <input type="text" id="seo-title" class="form-control" value="${this.escapeHtml(response.seo.title || '')}">
+            </div>
+            <div class="form-group">
+                <label for="seo-description">Meta Description</label>
+                <textarea id="seo-description" class="form-control" rows="3">${this.escapeHtml(response.seo.description || '')}</textarea>
+            </div>
+            <div class="form-group">
+                <label for="seo-keywords">Keywords (comma separated)</label>
+                <input type="text" id="seo-keywords" class="form-control" value="${this.escapeHtml(response.seo.keywords || '')}">
+            </div>
+            <button id="seo-save" class="btn btn-primary btn-block">
+                <i class="fas fa-save"></i> Save SEO Settings
+            </button>
+        `;
+        
+        // Add event listener to save button
+        document.getElementById('seo-save').addEventListener('click', () => this.saveSeoSettings());
+    } catch (error) {
+        // Show error message
+        document.getElementById('seo-content').innerHTML = `
+            <div class="error-message">
+                <p>Error loading SEO settings: ${error.message}</p>
+                <button class="btn btn-primary" id="retry-seo">Retry</button>
+            </div>
+        `;
+        
+        // Add retry button listener
+        document.getElementById('retry-seo').addEventListener('click', () => this.loadSeoSettings());
+    }
+},
+
+// Save SEO settings
+async saveSeoSettings() {
+    // Verify admin status
+    if (!this.isAdmin) {
+        this.showToast('error', 'Only administrators can save SEO settings');
+        return;
+    }
+    
+    // Get form values
+    const title = document.getElementById('seo-title').value;
+    const description = document.getElementById('seo-description').value;
+    const keywords = document.getElementById('seo-keywords').value;
+    
+    // Validate form
+    if (!title || !description || !keywords) {
+        this.showToast('error', 'Please fill in all fields');
+        return;
+    }
+    
+    // Show loading state
+    const submitBtn = document.getElementById('seo-save');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    submitBtn.disabled = true;
+    
+    try {
+        // Get token
+        const token = localStorage.getItem('auth_token');
+        
+        // Call API
+        const response = await API.saveSeoSettings({
+            title,
+            description,
+            keywords,
+            token
+        });
+        
+        // Show success message
+        this.showToast('success', 'SEO settings saved successfully');
+    } catch (error) {
+        // Show error message
+        this.showToast('error', `Failed to save SEO settings: ${error.message}`);
+    } finally {
+        // Restore button state
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+},
+
+setupProfilePage() {
+    // Avatar upload button
+    const changeAvatarBtn = document.getElementById('change-avatar-btn');
+    const avatarUpload = document.getElementById('avatar-upload');
+    
+    if (changeAvatarBtn && avatarUpload) {
+        changeAvatarBtn.addEventListener('click', () => {
+            avatarUpload.click();
+        });
+        
+        avatarUpload.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                this.handleAvatarUpload(e.target.files[0]);
+            }
+        });
+    }
+    
+    // Save signature button
+    const saveSignatureBtn = document.getElementById('save-signature-btn');
+    if (saveSignatureBtn) {
+        saveSignatureBtn.addEventListener('click', () => {
+            this.saveSignature();
+        });
+    }
+},
+
+// Update loadUserAvatar in app.js
+async loadUserAvatar() {
+    if (!this.currentUser) return;
+    
+    const avatarElement = document.getElementById('profile-avatar');
+    if (!avatarElement) return;
+    
+    // Check localStorage first
+    const localAvatar = localStorage.getItem('user_avatar');
+    if (localAvatar) {
+        avatarElement.innerHTML = `<img src="${localAvatar}" alt="${this.currentUser.username}">`;
+        return;
+    }
+    
+    // Fallback to default avatar with initial
+    const firstLetter = this.currentUser.username.charAt(0).toUpperCase();
+    const bgColor = this.getRandomColor();
+    
+    avatarElement.innerHTML = '';
+    avatarElement.style.backgroundColor = bgColor;
+    avatarElement.style.color = 'white';
+    avatarElement.style.fontSize = '60px';
+    avatarElement.style.fontWeight = 'bold';
+    avatarElement.textContent = firstLetter;
+},
+
+// Replace the handleAvatarUpload function in app.js
+handleAvatarUpload(file) {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+        const imgData = e.target.result;
+        
+        // Just update the avatar locally without server upload
+        const avatarElement = document.getElementById('profile-avatar');
+        if (avatarElement) {
+            avatarElement.innerHTML = `<img src="${imgData}" alt="${this.currentUser.username}">`;
+            // Store in localStorage for persistence
+            localStorage.setItem('user_avatar', imgData);
+        }
+        
+        this.showToast('success', 'Avatar updated locally');
+    };
+    
+    reader.readAsDataURL(file);
+},
+
+// Replace the saveSignature function in app.js
+async saveSignature() {
+    if (!this.currentUser) return;
+    
+    const signatureElement = document.getElementById('profile-signature');
+    if (!signatureElement) return;
+    
+    const signature = signatureElement.value.trim();
+    
+    // Store signature locally instead of on server
+    localStorage.setItem('user_signature', signature);
+    this.showToast('success', 'Signature saved locally');
+},
+// Update loadUserPlacard to support avatars
+async loadUserPlacard(username, placardElementId) {
+    try {
+        // Get placard element
+        const placardElement = document.getElementById(placardElementId);
+        if (!placardElement) return;
+        
+        // Initially show loading state
+        placardElement.innerHTML = `
+            <div class="placard-loading">
+                <i class="fas fa-spinner fa-spin"></i> Loading profile...
+            </div>
+        `;
+        
+        // Get token
+        const token = localStorage.getItem('auth_token');
+        
+        try {
+            // Get avatar URL
+            const avatarResponse = await API.getAvatar(username);
+            const avatarUrl = (avatarResponse.success && avatarResponse.avatarUrl) ? avatarResponse.avatarUrl : null;
+            
+            // Call API to get placard data
+            const response = await API.getUserPlacard(username, token);
+            const placard = response.placard;
+            
+            // Create avatar with image or first letter
+            let avatarHtml;
+            if (avatarUrl) {
+                avatarHtml = `<img src="${avatarUrl}" alt="${username}">`;
+            } else {
+                const firstLetter = placard.username.charAt(0).toUpperCase();
+                avatarHtml = firstLetter;
+            }
+            
+            // Calculate time since last activity for a user-friendly display
+            const lastActiveTime = this.getTimeSince(placard.lastActive);
+            
+            // Generate badges based on user's activity
+            const badges = this.generateUserBadges(placard);
+            
+            placardElement.innerHTML = `
+                <div class="twitter-card-avatar" style="background-color: ${avatarUrl ? 'transparent' : placard.avatarColor}">
+                    ${avatarHtml}
+                </div>
+                <div class="twitter-card-content">
+                    <div class="twitter-card-name">
+                        <span class="username">${this.escapeHtml(placard.username)}</span>
+                        <span class="role-badge">${this.escapeHtml(placard.role)}</span>
+                    </div>
+                    <div class="twitter-card-stats">
+                        <span class="stat"><strong>${placard.postCount}</strong> Posts</span>
+                        <span class="stat"><strong>${placard.replyCount}</strong> Replies</span>
+                    </div>
+                    <div class="twitter-card-badges">
+                        ${badges}
+                    </div>
+                    <div class="twitter-card-activity">
+                        <i class="fas fa-clock"></i> Active ${lastActiveTime}
+                    </div>
+                    ${placard.signature ? `<div class="twitter-card-signature">${this.escapeHtml(placard.signature)}</div>` : ''}
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error loading user placard:', error);
+            // If we get a server error, create a local fallback placard
+            this.createFallbackPlacard(username, placardElementId);
+        }
+    } catch (error) {
+        console.error('Error with placard element:', error);
+        
+        // Display error in placard
+        const placardElement = document.getElementById(placardElementId);
+        if (placardElement) {
+            placardElement.innerHTML = `
+                <div class="placard-error">
+                    <i class="fas fa-exclamation-circle"></i> Error loading profile
+                </div>
+            `;
+        }
+    }
+},       
+
+async saveSeoSettings() {
+    // Get form values
+    const title = document.getElementById('seo-title').value;
+    const description = document.getElementById('seo-description').value;
+    const keywords = document.getElementById('seo-keywords').value;
+    
+    // Validate form
+    if (!title || !description || !keywords) {
+        this.showToast('error', 'Please fill in all fields');
+        return;
+    }
+    
+    // Show loading state
+    const submitBtn = document.getElementById('seo-save');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    submitBtn.disabled = true;
+    
+    try {
+        // Get token
+        const token = localStorage.getItem('auth_token');
+        
+        // Call API
+        const response = await API.saveSeoSettings({
+            title,
+            description,
+            keywords,
+            token,
+            password: this.seoPassword // Use the stored password
+        });
+        
+        // Show success message
+        this.showToast('success', 'SEO settings saved successfully');
+    } catch (error) {
+        // Show error message
+        this.showToast('error', `Failed to save SEO settings: ${error.message}`);
+    } finally {
+        // Restore button state
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+},
+        
+        // Show error message
+        showError(elementId, message) {
+            const errorElement = document.getElementById(elementId);
+            errorElement.textContent = message;
+            errorElement.classList.remove('hidden');
+        },
+        
+        // Hide error message
+        hideError(elementId) {
+            const errorElement = document.getElementById(elementId);
+            errorElement.textContent = '';
+            errorElement.classList.add('hidden');
+        },
+        
+        // Show toast notification
+        showToast(type, message) {
+            // Create toast element
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <div class="toast-message">${message}</div>
+                <button class="toast-close">&times;</button>
+            `;
+            
+            // Add to container
+            const container = document.getElementById('toast-container');
+            container.appendChild(toast);
+            
+            // Add close button listener
+            toast.querySelector('.toast-close').addEventListener('click', () => {
+                container.removeChild(toast);
+            });
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (container.contains(toast)) {
+                    container.removeChild(toast);
+                }
+            }, 5000);
+        },
+        
+        // Show modal
+        showModal(title, content, confirmText, cancelText, confirmCallback) {
+            // Update modal content
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-content').innerHTML = content;
+            
+            // Configure buttons
+            const confirmBtn = document.getElementById('modal-confirm');
+            const cancelBtn = document.getElementById('modal-cancel');
+            
+            if (confirmText) {
+                confirmBtn.textContent = confirmText;
+                confirmBtn.classList.remove('hidden');
+                
+                // Set callback
+                confirmBtn.onclick = () => {
+                    if (confirmCallback) {
+                        confirmCallback();
+                    }
+                    this.closeModal();
+                };
+            } else {
+                confirmBtn.classList.add('hidden');
+            }
+            
+            if (cancelText) {
+                cancelBtn.textContent = cancelText;
+                cancelBtn.classList.remove('hidden');
+            } else {
+                cancelBtn.classList.add('hidden');
+            }
+            
+            // Show modal
+            document.getElementById('modal').classList.remove('hidden');
+        },
+        
+        // Close modal
+        closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+        },
+        
+        // Format date
+        formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        },
+        
+        // Escape HTML
+        escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    };
+    
+    // Initialize the application
+    App.init();
+});

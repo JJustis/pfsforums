@@ -1,0 +1,602 @@
+/* Enhanced Dark Theme Styles for Secure Forum - Reduced Stark Black */
+:root {
+    /* Light theme (default) variables */
+    --primary-color: #2196F3;
+    --primary-dark: #1976D2;
+    --secondary-color: #607D8B;
+    --secondary-dark: #455A64;
+    --success-color: #4CAF50;
+    --danger-color: #F44336;
+    --warning-color: #FFC107;
+    --info-color: #00BCD4;
+    --dark-color: #212121;
+    --light-color: #F5F5F5;
+    --text-color: #333333;
+    --text-light: #FFFFFF;
+    --bg-color: #F5F5F5;
+    --card-bg: #FFFFFF;
+    --card-secondary-bg: #f9f9f9;
+    --border-color: #e0e0e0;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --shadow-accent: rgba(0, 0, 0, 0.15);
+    --header-bg: rgba(33, 33, 33, 0.95);
+    --header-text: #FFFFFF;
+    --footer-bg: rgba(33, 33, 33, 0.95);
+    --footer-text: #FFFFFF;
+    --accent-glow: rgba(33, 150, 243, 0.15);
+    --thread-hover: rgba(33, 150, 243, 0.05);
+    --inactive-color: #757575;
+    --quote-color: #f5f5f5;
+    --code-bg: #f5f5f5;
+    --code-color: #333333;
+    --spoiler-bg: #f0f0f0;
+    --button-hover: rgba(0, 0, 0, 0.05);
+}
+
+/* Dark Theme Variables - Enhanced with Softer Colors */
+[data-theme="dark"] {
+    /* Base colors */
+    --primary-color: #7986CB;         /* Indigo 300 */
+    --primary-dark: #5C6BC0;          /* Indigo 400 */
+    --secondary-color: #9575CD;       /* Deep Purple 300 */
+    --secondary-dark: #7E57C2;        /* Deep Purple 400 */
+    --success-color: #66BB6A;         /* Green 400 */
+    --danger-color: #EF5350;          /* Red 400 */
+    --warning-color: #FFCA28;         /* Amber 400 */
+    --info-color: #4FC3F7;            /* Light Blue 300 */
+    
+    /* Surface colors - SOFTER BLACKS */
+    --dark-color: #1E2130;            /* Deep blue-grey instead of black */
+    --light-color: #252836;           /* Lighter blue-grey */
+    --text-color: #DADFE9;            /* Light blue-tinted text */
+    --text-light: #F8F9FA;            /* Off-white text */
+    --bg-color: #1A1C28;              /* Deep blue-grey background */
+    --card-bg: #252836;               /* Card background with blue tint */
+    --card-secondary-bg: #2E3347;     /* Secondary card with blue tint */
+    
+    /* Accent colors */
+    --border-color: #363A4F;          /* Border color with blue tint */
+    --shadow-color: rgba(103, 58, 183, 0.25);    /* Primary shadow - purple */
+    --shadow-accent: rgba(123, 31, 162, 0.35);   /* Secondary shadow - deeper purple */
+    --header-bg: rgba(26, 28, 40, 0.97);         /* Header background - blue-grey */
+    --header-text: #DADFE9;                      /* Header text */
+    --footer-bg: rgba(26, 28, 40, 0.97);         /* Footer background - blue-grey */
+    --footer-text: #DADFE9;                      /* Footer text */
+    --accent-glow: rgba(103, 58, 183, 0.2);      /* Purple glow for accents */
+    --thread-hover: rgba(103, 58, 183, 0.1);     /* Hover effect for threads */
+    --inactive-color: #8F94A8;                   /* Inactive blue-grey text */
+    
+    /* Grey swatches for various elements - WITH BLUE TINT */
+    --grey-100: #444B67;  /* Light blue-grey */
+    --grey-200: #3A4058;  /* Medium blue-grey */
+    --grey-300: #2E3347;  /* Blue-grey */
+    --grey-400: #282C3E;  /* Dark blue-grey */
+    --grey-500: #252836;  /* Darker blue-grey */
+    --grey-600: #1E2130;  /* Deepest blue-grey */
+    
+    /* BBCode styling */
+    --quote-color: #2C3144;                      /* Dark blue-grey for quotes */
+    --code-bg: #323649;                          /* Blue-grey for code blocks */
+    --code-color: #DADFE9;                       /* Light blue-grey text for code blocks */
+    --spoiler-bg: #292D3E;                       /* Blue-grey for spoilers */
+    --button-hover: rgba(255, 255, 255, 0.1);    /* Light hover effect */
+}
+
+/* Apply theme variables to elements */
+[data-theme="dark"] body {
+	
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+[data-theme="dark"] header {
+    background-color: var(--header-bg);
+    color: var(--header-text);
+    box-shadow: 0 2px 10px var(--shadow-color);
+    border-bottom: 1px solid var(--grey-400);
+}
+
+[data-theme="dark"] footer {
+    background-color: var(--footer-bg);
+    color: var(--footer-text);
+    box-shadow: 0 -2px 10px var(--shadow-color);
+    border-top: 1px solid var(--grey-400);
+}
+
+/* Card backgrounds with enhanced shadows and sheen effects */
+[data-theme="dark"] .auth-box,
+[data-theme="dark"] .forum-container,
+[data-theme="dark"] .profile-container,
+[data-theme="dark"] .seo-container {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+    box-shadow: 0 4px 20px var(--shadow-color), 0 0 0 1px var(--border-color);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+}
+
+/* Sheen effect for dark mode */
+[data-theme="dark"] .forum-container::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+	 
+    background: linear-gradient(
+        to bottom right,
+        transparent,
+        transparent,
+        transparent,
+        rgba(127, 90, 240, 0.05),
+        transparent,
+        transparent,
+        transparent
+    );
+    transform: rotate(30deg);
+    animation: sheen-dark 8s infinite linear;
+    z-index: -1;
+}
+
+@keyframes sheen-dark {
+    0% {
+        transform: rotate(30deg) translate(-30%, -30%);
+    }
+    25% {
+        transform: rotate(30deg) translate(-25%, -25%);
+    }
+    50% {
+        transform: rotate(30deg) translate(-20%, -20%);
+    }
+    75% {
+        transform: rotate(30deg) translate(-25%, -25%);
+    }
+    100% {
+        transform: rotate(30deg) translate(-30%, -30%);
+    }
+}
+
+/* Additional layer for more complex sheen */
+[data-theme="dark"] .forum-container::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        117deg,
+        transparent 20%,
+        rgba(103, 58, 183, 0.01) 40%,
+        rgba(103, 58, 183, 0.05) 60%,
+        transparent 80%
+    );
+    opacity: 0;
+    z-index: -1;
+    animation: pulse-sheen 10s infinite;
+}
+
+@keyframes pulse-sheen {
+    0%, 100% {
+        opacity: 0;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+/* Modal with special styling */
+[data-theme="dark"] .modal-container {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+    box-shadow: 0 10px 40px var(--shadow-accent), 0 0 0 1px var(--grey-300);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+[data-theme="dark"] .modal-header,
+[data-theme="dark"] .modal-footer {
+    background-color: var(--grey-400);
+    border-color: var(--grey-300);
+}
+[data-theme="dark"] .category-card{
+border-left: 4px solid var(--primary-color);
+}
+/* Secondary backgrounds with elegant styling */
+[data-theme="dark"] .category-card,
+[data-theme="dark"] .reply-card,
+[data-theme="dark"] .reply-content,
+[data-theme="dark"] .post-content-display{
+    background-color: var(--card-secondary-bg);
+    border-color: var(--border-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+}
+[data-theme="dark"] .post-card,
+[data-theme="dark"] .post-content-text,
+[data-theme="dark"] .profile-header,
+[data-theme="dark"] .thread-item {
+    background-color: var(--card-secondary-bg);
+    border-color: var(--border-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+	background-image: repeating-linear-gradient( 45deg, #800080, #800080 2px, #131313 2px, #212142 6px );
+}
+
+[data-theme="dark"] .category-card:hover,
+[data-theme="dark"] .post-card:hover,
+[data-theme="dark"] .thread-item:hover {
+    background-color: var(--grey-300);
+    box-shadow: 0 4px 12px var(--shadow-color);
+    transform: translateY(-2px);
+}
+
+/* Profile elements */
+[data-theme="dark"] .activity-stat,
+[data-theme="dark"] .profile-detail {
+    background-color: var(--grey-400);
+    border-color: var(--grey-300);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Form inputs with elegant styling */
+[data-theme="dark"] .form-control {
+    background-color: var(--grey-500);
+    color: var(--text-color);
+    border-color: var(--grey-300);
+    transition: all 0.2s ease;
+}
+
+[data-theme="dark"] .form-control:focus {
+    background-color: var(--grey-400);
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 0.2rem var(--accent-glow);
+}
+
+[data-theme="dark"] .form-control::placeholder {
+    color: var(--inactive-color);
+}
+
+/* Text colors and elevation */
+[data-theme="dark"] h1, 
+[data-theme="dark"] h2, 
+[data-theme="dark"] h3, 
+[data-theme="dark"] h4, 
+[data-theme="dark"] h5, 
+[data-theme="dark"] h6 {
+    color: var(--text-light);
+}
+
+[data-theme="dark"] h1,
+[data-theme="dark"] h2 {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Buttons with enhanced styling */
+[data-theme="dark"] .btn {
+    border: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+}
+
+[data-theme="dark"] .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px var(--shadow-color);
+}
+
+[data-theme="dark"] .btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Beautiful hover effects */
+[data-theme="dark"] .btn-primary {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+}
+
+[data-theme="dark"] .btn-secondary {
+    background: linear-gradient(135deg, var(--secondary-color), var(--secondary-dark));
+}
+
+/* Encryption status bar with glow */
+[data-theme="dark"] .encryption-status {
+    background-color: var(--accent-glow);
+    border-left: 4px solid var(--secondary-color);
+    box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+[data-theme="dark"] .encryption-status i {
+    color: var(--secondary-color);
+    text-shadow: 0 0 5px var(--accent-glow);
+}
+
+/* Hero section */
+[data-theme="dark"] .hero, 
+[data-theme="dark"] .features {
+	  background-image: url('https://jcmc.serveminecraft.net/dashboard/uploads/68243bed91f15.png');
+  background-size: cover;       /* Make it cover the whole area */
+  background-repeat: no-repeat; /* Don't tile the image */
+  background-position: center;  /* Center the image */
+    background-color: var(--card-bg);
+    box-shadow: 0 4px 20px var(--shadow-color);
+}
+
+[data-theme="dark"] .feature-card {
+    background-color: var(--grey-300);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--grey-400);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+[data-theme="dark"] .feature-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px var(--shadow-accent);
+}
+
+[data-theme="dark"] .feature-icon {
+    color: var(--secondary-color);
+    text-shadow: 0 0 10px var(--accent-glow);
+}
+
+/* Twitter-style profile cards */
+[data-theme="dark"] .twitter-profile-card,
+[data-theme="dark"] .reply-twitter-card {
+    background-color: var(--grey-400);
+    border-left: 4px solid var(--secondary-color);
+}
+
+[data-theme="dark"] .twitter-card-name .username {
+    color: var(--text-light);
+}
+
+[data-theme="dark"] .twitter-card-stats .stat strong {
+    color: var(--secondary-color);
+}
+
+[data-theme="dark"] .twitter-card-badges .badge {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .twitter-card-avatar {
+    box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+/* BBCode styling in dark mode */
+[data-theme="dark"] .bbcode-quote {
+    background-color: var(--quote-color);
+    border-left: 3px solid var(--secondary-color);
+    color: var(--text-color);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .bbcode-quote cite {
+   color: #E4E7F2;
+}
+
+/* Improved code block styling for dark mode */
+[data-theme="dark"] .bbcode-code,
+[data-theme="dark"] pre,
+[data-theme="dark"] code {
+    background-color: #1E2233;
+    color: #E4E7F2;
+    border: 1px solid var(--grey-300);
+    box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.2);
+    font-family: 'Courier New', monospace;
+}
+
+[data-theme="dark"] pre code {
+    border: none;
+    box-shadow: none;
+}
+
+/* Inline code styling */
+[data-theme="dark"] code {
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+/* Block code styling */
+[data-theme="dark"] pre {
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+}
+
+[data-theme="dark"] .bbcode-code {
+    margin: 15px 0;
+    border-radius: 6px;
+    padding: 15px;
+}
+
+[data-theme="dark"] .bbcode-code code {
+    background-color: transparent;
+}
+
+/* Code syntax highlighting colors for dark mode */
+[data-theme="dark"] .code-keyword {
+    color: #BB86FC; /* Light purple */
+}
+
+[data-theme="dark"] .code-string {
+    color: #03DAC5; /* Teal */
+}
+
+[data-theme="dark"] .code-comment {
+    color: #6B7394; /* Muted blue-grey */
+    font-style: italic;
+}
+
+[data-theme="dark"] .code-number {
+    color: #FF7597; /* Pink */
+}
+
+[data-theme="dark"] .code-function {
+    color: #82AAFF; /* Light blue */
+}
+
+[data-theme="dark"] .bbcode-list {
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .bbcode-img {
+    border: 1px solid var(--grey-300);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .bbcode-spoiler {
+    background-color: var(--spoiler-bg);
+    border: 1px solid var(--grey-200);
+}
+
+[data-theme="dark"] .spoiler-toggle {
+    background-color: var(--grey-200);
+    color: var(--text-color);
+    border-bottom: 1px solid var(--grey-300);
+}
+
+[data-theme="dark"] .spoiler-toggle:hover {
+    background-color: var(--grey-300);
+}
+
+[data-theme="dark"] .spoiler-content {
+    background-color: var(--grey-400);
+}
+
+[data-theme="dark"] .bbcode-hr {
+    background-image: linear-gradient(to right, rgba(103, 58, 183, 0), rgba(103, 58, 183, 0.75), rgba(103, 58, 183, 0));
+}
+
+/* BBCode Toolbar in dark mode */
+[data-theme="dark"] .bbcode-toolbar {
+    background-color: var(--grey-400);
+    border-color: var(--grey-300);
+}
+
+[data-theme="dark"] .toolbar-btn {
+    background-color: var(--grey-300);
+    border-color: var(--grey-200);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .toolbar-btn:hover {
+    background-color: var(--grey-200);
+    border-color: var(--secondary-color);
+}
+
+[data-theme="dark"] .toolbar-divider {
+    background-color: var(--grey-300);
+}
+
+/* Toast notifications */
+[data-theme="dark"] .toast {
+    box-shadow: 0 4px 15px var(--shadow-color);
+}
+
+/* Loading spinner */
+[data-theme="dark"] .loading-spinner {
+    color: var(--secondary-color);
+}
+
+[data-theme="dark"] .loading-spinner i {
+    text-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* Error messages */
+[data-theme="dark"] .error-message {
+    background-color: rgba(244, 67, 54, 0.1);
+    border-left-color: var(--danger-color);
+}
+
+/* Toggle Button Styles - Enhanced */
+.theme-toggle-container {
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+}
+
+.theme-toggle {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+}
+
+.theme-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 24px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+/* Enhanced toggle appearance */
+[data-theme="dark"] .slider {
+    background-color: #673AB7;
+    box-shadow: 0 0 8px rgba(103, 58, 183, 0.5);
+}
+
+[data-theme="dark"] .slider:before {
+    background-color: #F5F5F5;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+input:checked + .slider {
+    background-color: var(--secondary-color);
+}
+
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+.theme-toggle-icon {
+    margin-right: 8px;
+    font-size: 16px;
+}
+
+[data-theme="dark"] .theme-toggle-icon {
+    color: var(--secondary-color);
+    text-shadow: 0 0 5px var(--accent-glow);
+}
+
+/* Scrollbar styling */
+[data-theme="dark"] ::-webkit-scrollbar {
+    width: 12px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-track {
+    background: var(--grey-600);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background-color: var(--grey-300);
+    border-radius: 6px;
+    border: 3px solid var(--grey-600);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--secondary-dark);
+}
