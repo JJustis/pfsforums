@@ -110,7 +110,75 @@ const Markup = {
             let items = contents.replace(/\[\*\](.*?)(?=\[\*\]|$)/gs, '<li>$1</li>');
             return '<ol class="bbcode-list bbcode-list-numbered">' + items + '</ol>';
         });
-        
+        // Add this HTML BBCode parsing function to markup.js
+// Place it with the other BBCode parsing rules in the parse function
+
+// HTML code [html]...[/html]
+html = html.replace(/\[html\]([\s\S]*?)\[\/html\]/gs, function(match, htmlContent) {
+    // Create unique ID for this HTML block
+    const uniqueId = 'html-content-' + Math.random().toString(36).substring(2, 15);
+    
+    // Store the raw HTML for later processing via JavaScript
+    const processedHtml = `
+        <div id="${uniqueId}" class="bbcode-html-container">
+            <div class="html-content-loading">Loading HTML content...</div>
+        </div>
+        <script>
+            (function() {
+                // This function runs after the page is loaded
+                function processHtmlContent() {
+                    const container = document.getElementById('${uniqueId}');
+                    if (!container) return;
+                    
+                    // The HTML content, with quotes and special chars properly escaped for JS
+                    let htmlContent = ${JSON.stringify(htmlContent)};
+                    
+                    // Security: Remove potentially dangerous HTML elements
+                    const disallowedElements = [
+                        'script', 'iframe', 'object', 'embed', 'meta', 'link', 'style', 'frame', 'frameset',
+                        'applet', 'param', 'base', 'form', 'input', 'textarea', 'select', 'option',
+                        'button', 'noscript'
+                    ];
+                    
+                    // Create a regex that matches any of these tags (opening or closing)
+                    const disallowedTagsRegex = new RegExp('<\\/?(' + disallowedElements.join('|') + ')(\\s[^>]*)?>', 'gi');
+                    
+                    // Remove disallowed tags
+                    htmlContent = htmlContent.replace(disallowedTagsRegex, '');
+                    
+                    // Remove dangerous attributes (event handlers, javascript: URLs, etc.)
+                    const dangerousAttrs = [
+                        'onabort', 'onblur', 'onchange', 'onclick', 'ondblclick', 'onerror', 'onfocus',
+                        'onkeydown', 'onkeypress', 'onkeyup', 'onload', 'onmousedown', 'onmousemove',
+                        'onmouseout', 'onmouseover', 'onmouseup', 'onreset', 'onresize', 'onselect',
+                        'onsubmit', 'onunload'
+                    ];
+                    
+                    // Create pattern for dangerous attributes
+                    dangerousAttrs.forEach(attr => {
+                        const pattern = new RegExp('\\s' + attr + '\\s*=\\s*["\\\'][^"\\\']*["\\\']', 'gi');
+                        htmlContent = htmlContent.replace(pattern, '');
+                    });
+                    
+                    // Ensure there are no data: or javascript: URLs
+                    htmlContent = htmlContent.replace(/\b(href|src)=(["'])(data:|javascript:|vbscript:).*?\2/gi, '$1=$2#$2');
+                    
+                    // Set the processed HTML
+                    container.innerHTML = htmlContent;
+                }
+                
+                // Run immediately or when the DOM is ready
+                if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                    setTimeout(processHtmlContent, 1);
+                } else {
+                    document.addEventListener('DOMContentLoaded', processHtmlContent);
+                }
+            })();
+        </script>
+    `;
+    
+    return processedHtml;
+});
         // Forum Bot [bot]...[/bot] or [bot:name=...]...[/bot] or [bot:name=...:type=...]...[/bot]
         html = html.replace(/\[bot(?::name=([^\]]+))?(?::type=([^\]]+))?\]([\s\S]*?)\[\/bot\]/gs, function(match, botName, botType, initialContent) {
             // Generate a unique ID for this bot instance
@@ -164,157 +232,92 @@ const Markup = {
         });
         
         // PayPal transaction [paypal:product=...]...[/paypal]
-        html = html.replace(/\[paypal:product=([^\]]+?)(?:\s+price=([0-9.]+))?(?:\s+currency=([A-Z]{3}))?(?:\s+email=([^\s\]]+))?(?:\s+file=([^\s\]]+))(?:\s+owner=([^\s\]]+))?\](.*?)\[\/paypal\]/gs, function(match, productName, price, currency, email, fileId, ownerUsername, description) {
-            // Set defaults or use provided values
-            price = price || "1.00";
-            currency = currency || "USD";
-            email = email || '';
-            ownerUsername = ownerUsername || '';
-            
-            // Get current user info if available
-            const currentUsername = window.App && window.App.currentUser ? window.App.currentUser.username : '';
-            
-            // Check if current user is the owner
-            const isOwner = (currentUsername && ownerUsername && currentUsername === ownerUsername);
-            
-            // Generate a unique transaction ID
-            const transactionId = 'tx_' + Math.random().toString(36).substring(2, 15);
-            
-            // Create timestamp for transaction reference
-            const timestamp = new Date().getTime();
-            
-            // Use the actual file ID if provided
-            const productId = fileId || ('prod_' + Math.random().toString(36).substring(2, 15));
-            
-            // If not the owner, show a warning message instead of the buy button
-            if (!isOwner && ownerUsername) {
-                return `
-                    <div class="paypal-transaction ownership-error" data-product-id="${productId}">
-                        <div class="paypal-header warning">
-                            <i class="fas fa-exclamation-triangle"></i> Ownership Verification Failed
-                        </div>
-                        <div class="paypal-content">
-                            <div class="product-info">
-                                <h4 class="product-name">${escapeHtml(productName)}</h4>
-                                <div class="product-description">
-                                    <p>This product can only be sold by its owner: <strong>${escapeHtml(ownerUsername)}</strong></p>
-                                    <p>The current user (${escapeHtml(currentUsername || 'Unknown')}) does not have permission to sell this product.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            // Normal PayPal button for the owner
-            return `
-                <div class="paypal-transaction" data-product-id="${productId}" data-owner="${escapeHtml(ownerUsername)}">
-                    <div class="paypal-header">
-                        <i class="fab fa-paypal"></i> Digital Product
-                    </div>
-                    <div class="paypal-content">
-                        <div class="product-info">
-                            <h4 class="product-name">${escapeHtml(productName)}</h4>
-                            <div class="product-price">${price} ${currency}</div>
-                            <div class="product-description">${description}</div>
-                        </div>
-                        <div class="paypal-actions">
-                            <form action="${window.PAYPAL_URL || 'https://www.paypal.com/cgi-bin/webscr'}" method="post" class="paypal-form" target="_blank">
-                                <input type="hidden" name="cmd" value="_xclick">
-                                <input type="hidden" name="business" value="${email}">
-                                <input type="hidden" name="item_name" value="${escapeHtml(productName)}">
-                                <input type="hidden" name="item_number" value="${productId}">
-                                <input type="hidden" name="amount" value="${price}">
-                                <input type="hidden" name="currency_code" value="${currency}">
-                                <input type="hidden" name="return" value="forum_return.php?product=${productId}&timestamp=${timestamp}">
-                                <input type="hidden" name="cancel_return" value="forum_cancel.php?product=${productId}">
-                                <input type="hidden" name="notify_url" value="ipn.php">
-                                <input type="hidden" name="no_shipping" value="1">
-                                <input type="hidden" name="custom" value="${encodeURIComponent(JSON.stringify({
-                                    transaction_id: transactionId,
-                                    product_id: productId,
-                                    timestamp: timestamp,
-                                    seller_email: email,
-                                    owner_username: ownerUsername
-                                }))}">
-                                <button type="submit" class="paypal-buy-button">
-                                    <i class="fab fa-paypal"></i> Buy Now
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-        
-        // CryptoCoin product [cryptocoin:product=...] BBCode
-        html = html.replace(/\[cryptocoin:product=([^\]]+?)(?:\s+price=([0-9.]+))?(?:\s+currency=([A-Z]{3}|CryptoCoins))?(?:\s+image=([^\s\]]+))?\](?:\n|\r\n)?(.*?)(?:\n|\r\n)?\[\/cryptocoin:product\]/gs, function(match, productName, price, currency, imageUrl, description) {
-            // Set defaults or use provided values
-            price = price || "100";
-            currency = currency || "CryptoCoins";
-            description = description || "No description provided";
-            
-            // Create the HTML
-            let productHtml = `
-                <div class="cryptocoin-product" style="background: linear-gradient(135deg, #1a1a1a, #2a2a2a); color: #e0e0e0; border: 1px solid #333; max-width: 300px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); font-family: 'Roboto', Arial, sans-serif; margin: 15px 0;">
-            `;
-            
-            // Add image if provided
-            if (imageUrl) {
-                productHtml += `<img src="${escapeHtml(imageUrl)}" style="width: 100%; height: auto; object-fit: cover;">`;
-            }
-            
-            productHtml += `
-                    <div style="padding: 15px;">
-                        <h3 style="margin-top: 0; color: #bb86fc;">${escapeHtml(productName)}</h3>
-                        <p style="margin: 5px 0; color: #e0e0e0;">${escapeHtml(description)}</p>
-                        <p style="font-weight: bold; color: #03dac6;">Price: ${price} ${currency}</p>
-                        <a href="https://cryptocoin.example.com/shop.php?product=${encodeURIComponent(productName)}" style="background-color: #bb86fc; color: #000; display: inline-block; margin-top: 10px; padding: 8px 15px; text-decoration: none; border-radius: 4px; font-weight: bold;">Buy Now</a>
-                    </div>
-                </div>
-            `;
-            
-            return productHtml;
-        });
+// Add this to markup.js, replacing the existing PayPal BBCode handler
 
-        // CryptoCoin listing [cryptocoin:listing] BBCode - Card style
-        html = html.replace(/\[cryptocoin:listing(?::type=([^\]]+))?](?:\s+)?\[amount=([0-9.]+)\](?:\s+)?\[price=([0-9.]+)\](?:\s+)?(.*?)(?:\s+)?\[\/cryptocoin:listing\]/gs, function(match, type, amount, price, description) {
-            // Set defaults
-            type = type || "card";
-            description = description.trim() || "CryptoCoin listing";
-            
-            // Create HTML based on type
-            if (type === "marquee") {
-                // Marquee style
-                return `
-                    <div class="cryptocoin-listing marquee" style="width: 100%; overflow: hidden; background: linear-gradient(90deg, #212121, #1b1b1b); color: #e0e0e0; border: 1px solid #333; border-radius: 4px; padding: 10px 0; font-family: 'Roboto', Arial, sans-serif; margin: 15px 0;">
-                        <div style="display: inline-block; white-space: nowrap; animation: marquee 15s linear infinite;">
-                            🚀 CryptoCoin For Sale: ${amount} CryptoCoins for just $${price} | <span style="color: #03dac6; font-weight: bold;">${escapeHtml(description)}</span> | <a href="https://cryptocoin.example.com/buy.php?amount=${amount}&price=${price}" style="color: #03dac6; text-decoration: none; font-weight: bold;">Buy Now</a> 🚀
+// PayPal transaction [paypal:product=...]...[/paypal]
+html = html.replace(/\[paypal:product=([^\]]+?)(?:\s+price=([0-9.]+))?(?:\s+currency=([A-Z]{3}))?(?:\s+email=([^\s\]]+))?(?:\s+file=([^\s\]]+))(?:\s+owner=([^\s\]]+))?\](.*?)\[\/paypal\]/gs, function(match, productName, price, currency, email, fileId, ownerUsername, description) {
+    // Set defaults or use provided values
+    price = price || "1.00";
+    currency = currency || "USD";
+    email = email || '';
+    ownerUsername = ownerUsername || '';
+    
+    // Get current user info if available
+    const currentUsername = window.App && window.App.currentUser ? window.App.currentUser.username : '';
+    
+    // Check if current user is the owner
+    const isOwner = (currentUsername && ownerUsername && currentUsername === ownerUsername);
+    
+    // Generate a unique transaction ID
+    const transactionId = 'tx_' + Math.random().toString(36).substring(2, 15);
+    
+    // Create timestamp for transaction reference
+    const timestamp = new Date().getTime();
+    
+    // Use the actual file ID if provided
+    const productId = fileId || ('prod_' + Math.random().toString(36).substring(2, 15));
+    
+    // If not the owner, show a warning message instead of the buy button
+    if (!isOwner && ownerUsername) {
+        return `
+            <div class="paypal-transaction ownership-error" data-product-id="${productId}">
+                <div class="paypal-header warning">
+                    <i class="fas fa-exclamation-triangle"></i> Ownership Verification Failed
+                </div>
+                <div class="paypal-content">
+                    <div class="product-info">
+                        <h4 class="product-name">${escapeHtml(productName)}</h4>
+                        <div class="product-description">
+                            <p>This product can only be sold by its owner: <strong>${escapeHtml(ownerUsername)}</strong></p>
+                            <p>The current user (${escapeHtml(currentUsername || 'Unknown')}) does not have permission to sell this product.</p>
                         </div>
                     </div>
-                    <style>
-                        @keyframes marquee {
-                            0% { transform: translateX(100%); }
-                            100% { transform: translateX(-100%); }
-                        }
-                    </style>
-                `;
-            } else {
-                // Default card style
-                return `
-                    <div class="cryptocoin-listing card" style="background: linear-gradient(135deg, #1a1a1a, #2a2a2a); color: #e0e0e0; border: 1px solid #333; max-width: 300px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); font-family: 'Roboto', Arial, sans-serif; margin: 15px 0;">
-                        <div style="padding: 15px;">
-                            <h3 style="margin-top: 0; color: #03dac6;">CryptoCoin For Sale</h3>
-                            <p style="margin: 5px 0;">Amount: <span style="font-weight: bold;">${amount} CryptoCoins</span></p>
-                            <p style="margin: 5px 0;">Price: <span style="font-weight: bold; color: #03dac6;">$${price}</span></p>
-                            <p style="margin: 5px 0;">${escapeHtml(description)}</p>
-                            <a href="https://cryptocoin.example.com/buy.php?amount=${amount}&price=${price}" style="display: inline-block; margin-top: 10px; padding: 8px 15px; background-color: #03dac6; color: #000; text-decoration: none; border-radius: 4px; font-weight: bold;">Buy Now</a>
-                        </div>
-                    </div>
-                `;
-            }
-        });
-        
+                </div>
+            </div>
+        `;
+    }
+    
+    // Normal PayPal button for the owner
+    return `
+        <div class="paypal-transaction" data-product-id="${productId}" data-owner="${escapeHtml(ownerUsername)}">
+            <div class="paypal-header">
+                <i class="fab fa-paypal"></i> Digital Product
+            </div>
+            <div class="paypal-content">
+                <div class="product-info">
+                    <h4 class="product-name">${escapeHtml(productName)}</h4>
+                    <div class="product-price">${price} ${currency}</div>
+                    <div class="product-description">${description}</div>
+                </div>
+                <div class="paypal-actions">
+                    <form action="${window.PAYPAL_URL || 'https://www.paypal.com/cgi-bin/webscr'}" method="post" class="paypal-form" target="_blank">
+                        <input type="hidden" name="cmd" value="_xclick">
+                        <input type="hidden" name="business" value="${email}">
+                        <input type="hidden" name="item_name" value="${escapeHtml(productName)}">
+                        <input type="hidden" name="item_number" value="${productId}">
+                        <input type="hidden" name="amount" value="${price}">
+                        <input type="hidden" name="currency_code" value="${currency}">
+                        <input type="hidden" name="return" value="forum_return.php?product=${productId}&timestamp=${timestamp}">
+                        <input type="hidden" name="cancel_return" value="forum_cancel.php?product=${productId}">
+                        <input type="hidden" name="notify_url" value="ipn.php">
+                        <input type="hidden" name="no_shipping" value="1">
+                        <input type="hidden" name="custom" value="${encodeURIComponent(JSON.stringify({
+                            transaction_id: transactionId,
+                            product_id: productId,
+                            timestamp: timestamp,
+                            seller_email: email,
+                            owner_username: ownerUsername
+                        }))}">
+                        <button type="submit" class="paypal-buy-button">
+                            <i class="fab fa-paypal"></i> Buy Now
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `;
+});
+
         // Assembly code [asm]...[/asm] or [asm:title=...]...[/asm]
         html = html.replace(/\[asm(?::title=([^\]]+))?\]([\s\S]*?)\[\/asm\]/gs, function(match, title, code) {
             // Un-escape HTML within ASM blocks (since we need to preserve code exactly as written)
@@ -338,37 +341,6 @@ const Markup = {
                 </div>
             `;
         });
-        
-// HTML code [html]...[/html]
-html = html.replace(/\[html\]([\s\S]*?)\[\/html\]/gs, function(match, htmlContent) {
-    // Un-escape HTML entities if they were already escaped
-    htmlContent = htmlContent
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, "\"")
-        .replace(/&#039;/g, "'")
-        .replace(/&amp;/g, "&");
-    
-    // Generate a unique ID for this content
-    const uniqueId = 'html-' + Math.random().toString(36).substring(2, 9);
-    
-    // This approach uses a script tag to set the HTML content
-    // The script runs immediately and sets the inner HTML of the container
-    // This ensures the browser properly parses and renders the HTML
-    return `
-        <div id="${uniqueId}" class="bbcode-html-container">Loading HTML content...</div>
-        <script>
-            (function() {
-                // Get the container element
-                var container = document.getElementById('${uniqueId}');
-                if (container) {
-                    // Set the inner HTML
-                    container.innerHTML = \`${htmlContent.replace(/`/g, '\\`')}\`;
-                }
-            })();
-        </script>
-    `;
-});
         
         // URL [url]...[/url] or [url=...]...[/url]
         html = html.replace(/\[url\](https?:\/\/[^\s\]]+)\[\/url\]/gs, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
@@ -409,14 +381,7 @@ html = html.replace(/\[html\]([\s\S]*?)\[\/html\]/gs, function(match, htmlConten
         // Get content - prefer innerHTML over textContent to preserve existing structure
         const content = element.innerHTML || element.textContent || '';
         
-        // If the content has HTML BBCode tags, process them specifically first
-        if (content.match(/\[html\]/i)) {
-            element.innerHTML = this.parse(content);
-            console.log('Applied HTML BBCode to element:', element);
-            return;
-        }
-        
-        // If the content has other BBCode tags, process it
+        // If the content has BBCode tags like [b], process it
         if (content.match(/\[[a-z\d=]/i)) {
             element.innerHTML = this.parse(content);
             console.log('Applied markup to element:', element);
@@ -438,25 +403,7 @@ html = html.replace(/\[html\]([\s\S]*?)\[\/html\]/gs, function(match, htmlConten
             this.applyToElement(element);
         });
     },
-    // Process HTML BBCode elements
-processHtmlBBCode: function() {
-    console.log('Processing HTML BBCode elements');
     
-    // Find container divs that might contain raw HTML
-    document.querySelectorAll('.bbcode-html-container').forEach(container => {
-        // Skip if already processed
-        if (container.dataset.processed === 'true') return;
-        
-        // Set as processed to avoid re-processing
-        container.dataset.processed = 'true';
-        
-        // Force reflow (this sometimes helps with rendering)
-        container.style.display = 'block';
-        void container.offsetWidth;
-        
-        console.log('Processed HTML BBCode container', container.id);
-    });
-},
     // Process all content in the page
     processPageContent() {
         console.log('Processing page content for BBCode...');
@@ -478,93 +425,6 @@ processHtmlBBCode: function() {
             elements.forEach(element => {
                 this.applyToElement(element);
             });
-        });
-        
-        // Process HTML BBCode containers after a short delay
-        setTimeout(() => {
-            this.processHtmlContainers();
-        }, 100);
-    },
-    processHtmlBBCodeElements: function() {
-    // Find all elements that might contain HTML BBCode that weren't processed
-    document.querySelectorAll('.bbcode-html-container').forEach(container => {
-        // Skip if the container is already processed or empty
-        if (container.children.length > 1 || container.dataset.processed === 'true') return;
-        
-        // Check if container still has loading message
-        const loadingEl = container.querySelector('.html-loading');
-        if (!loadingEl) return;
-        
-        // Try to get raw content from container's parent
-        let parentElement = container.parentElement;
-        if (!parentElement) return;
-        
-        // Look for HTML BBCode in the parent
-        const bbcodeMatch = parentElement.innerHTML.match(/\[html\]([\s\S]*?)\[\/html\]/);
-        if (!bbcodeMatch) return;
-        
-        let htmlContent = bbcodeMatch[1];
-        
-        // Un-escape any already escaped HTML
-        htmlContent = htmlContent
-            .replace(/&lt;/g, "<")
-            .replace(/&gt;/g, ">")
-            .replace(/&quot;/g, "\"")
-            .replace(/&#039;/g, "'")
-            .replace(/&amp;/g, "&");
-        
-        // Remove dangerous elements and attributes
-        // Security: Remove potentially dangerous HTML elements
-        const disallowedElements = [
-            'script', 'iframe', 'object', 'embed', 'meta', 'link', 'style', 'frame', 'frameset',
-            'applet', 'param', 'base'
-        ];
-        
-        // Create a regex that matches any of these tags (opening or closing)
-        const disallowedTagsRegex = new RegExp('<\\/?(' + disallowedElements.join('|') + ')(\\s[^>]*)?>', 'gi');
-        
-        // Remove disallowed tags
-        htmlContent = htmlContent.replace(disallowedTagsRegex, '');
-        
-        // Remove dangerous attributes
-        const dangerousAttributes = [
-            'onabort', 'onblur', 'onchange', 'onclick', 'ondblclick', 'onerror', 'onfocus',
-            'onkeydown', 'onkeypress', 'onkeyup', 'onload', 'onmousedown', 'onmousemove',
-            'onmouseout', 'onmouseover', 'onmouseup', 'onreset', 'onresize', 'onselect',
-            'onsubmit', 'onunload'
-        ];
-        
-        // Remove each dangerous attribute
-        dangerousAttributes.forEach(attr => {
-            const pattern = new RegExp('\\s' + attr + '\\s*=\\s*["\\\'][^"\\\']*["\\\']', 'gi');
-            htmlContent = htmlContent.replace(pattern, '');
-        });
-        
-        // Ensure there are no data: or javascript: URLs
-        htmlContent = htmlContent.replace(/\b(href|src)=(["'])(data:|javascript:|vbscript:).*?\2/gi, '$1=$2#$2');
-        
-        // Set the processed HTML content
-        container.innerHTML = htmlContent;
-        
-        // Mark as processed to avoid re-processing
-        container.dataset.processed = 'true';
-        
-        console.log('Post-processed HTML BBCode container:', container.id);
-    });
-},
-    // Process HTML containers specifically
-    processHtmlContainers() {
-        console.log('Processing HTML BBCode containers');
-        document.querySelectorAll('.bbcode-html-container').forEach(container => {
-            // Just ensure the container is visible and properly formatted
-            container.style.display = 'block';
-            
-            // Force browser to re-parse the HTML if needed
-            if (container.parentNode) {
-                const parent = container.parentNode;
-                const clone = container.cloneNode(true);
-                parent.replaceChild(clone, container);
-            }
         });
     },
     
@@ -626,10 +486,9 @@ processHtmlBBCode: function() {
         
         // Define toolbar buttons
         const buttons = [
+		{ icon: 'code', title: 'HTML Code', prefix: '[html]', suffix: '[/html]', dialog: false, placeholder: 'Enter HTML code' },
             { icon: 'shopping-cart', title: 'PayPal Product', insertText: '[paypal:product=My Product price=9.99 currency=USD email=your@email.com file=product123]\nProduct description goes here\n[/paypal]' },
             { icon: 'robot', title: 'Interactive Bot', insertText: '[bot:name=Forum Bot:type=auto]\nHello! I am a forum bot. You can interact with me.\n[/bot]' },
-            { divider: true },
-            { icon: 'code', title: 'HTML Code', prefix: '[html]', suffix: '[/html]' },
             { icon: 'bold', title: 'Bold', prefix: '[b]', suffix: '[/b]' },
             { icon: 'italic', title: 'Italic', prefix: '[i]', suffix: '[/i]' },
             { icon: 'underline', title: 'Underline', prefix: '[u]', suffix: '[/u]' },
@@ -817,26 +676,6 @@ processHtmlBBCode: function() {
                             <li><code>[asm:title=Title]Assembly code[/asm]</code></li>
                         </ul>
                     </div>
-                    
-                    <div class="help-section">
-                        <h4>HTML Content</h4>
-                        <ul>
-                            <li><code>[html]&lt;div class="custom"&gt;Custom HTML&lt;/div&gt;[/html]</code></li>
-                        </ul>
-                        <p>Use this tag to include custom HTML formatting. Note that for security reasons, script tags and potentially harmful elements are automatically removed.</p>
-                        <p><strong>Allowed:</strong> Basic HTML elements like div, span, p, h1-h6, a, img, table, etc.</p>
-                        <p><strong>Not Allowed:</strong> script, iframe, embed, meta, form elements, event handlers</p>
-                    </div>
-                    
-                    <div class="help-section">
-                        <h4>CryptoCoin Elements</h4>
-                        <ul>
-                            <li><code>[cryptocoin:product=Product Name price=100 currency=CryptoCoins]Description[/cryptocoin:product]</code></li>
-                            <li><code>[cryptocoin:listing][amount=1000][price=50]Description[/cryptocoin:listing]</code></li>
-                            <li><code>[cryptocoin:listing:type=marquee][amount=1000][price=50]Description[/cryptocoin:listing]</code></li>
-                        </ul>
-                        <p>Use these tags to display CryptoCoin products and listings on the forum.</p>
-                    </div>
                 </div>
             `;
             
@@ -894,7 +733,46 @@ processHtmlBBCode: function() {
                 margin: 15px 0;
                 max-width: 100%;
             }
-            
+            .bbcode-html-container {
+    margin: 10px 0;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    overflow: auto;
+    max-width: 100%;
+}
+
+.bbcode-html-container table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.bbcode-html-container table, .bbcode-html-container th, .bbcode-html-container td {
+    border: 1px solid #ddd;
+    padding: 8px;
+}
+
+.bbcode-html-container th {
+    padding-top: 12px;
+    padding-bottom: 12px;
+    text-align: left;
+    background-color: #f5f5f5;
+}
+
+.bbcode-html-container a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+.bbcode-html-container a:hover {
+    text-decoration: underline;
+}
+
+.bbcode-html-container img {
+    max-width: 100%;
+    height: auto;
+}
             .bbcode-youtube iframe {
                 position: absolute;
                 top: 0;
@@ -954,48 +832,6 @@ processHtmlBBCode: function() {
             @keyframes marquee {
                 0% { transform: translateX(100%); }
                 100% { transform: translateX(-100%); }
-            }
-            
-            /* HTML container styles */
-            .bbcode-html-container {
-                margin: 10px 0;
-                padding: 15px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                background-color: #f8f8f8;
-                overflow: auto;
-                max-width: 100%;
-            }
-            
-            .bbcode-html-container table {
-                border-collapse: collapse;
-                width: 100%;
-            }
-            
-            .bbcode-html-container table, .bbcode-html-container th, .bbcode-html-container td {
-                border: 1px solid #ddd;
-                padding: 8px;
-            }
-            
-            .bbcode-html-container th {
-                padding-top: 12px;
-                padding-bottom: 12px;
-                text-align: left;
-                background-color: #f5f5f5;
-            }
-            
-            .bbcode-html-container a {
-                color: #3498db;
-                text-decoration: none;
-            }
-            
-            .bbcode-html-container a:hover {
-                text-decoration: underline;
-            }
-            
-            .bbcode-html-container img {
-                max-width: 100%;
-                height: auto;
             }
             
             /* YouTube icon for Font Awesome */
@@ -1117,12 +953,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Clear interval after 30 seconds to avoid performance issues
     setTimeout(() => clearInterval(checkInterval), 30000);
     
-    // Extra step: Process HTML BBCode containers after page load
-    setTimeout(() => {
-        console.log('Post-processing HTML BBCode containers');
-        Markup.processHtmlContainers();
-    }, 100);
-    
     // Hook into the post and reply display functions
     if (window.App) {
         // Extend the viewPost method to apply markup
@@ -1184,99 +1014,9 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Add an event listener for form submissions to process HTML content
-document.addEventListener('submit', function(e) {
-    if (e.target.tagName === 'FORM') {
-        // Process any HTML BBCode in textareas
-        const textareas = e.target.querySelectorAll('textarea');
-        textareas.forEach(textarea => {
-            const content = textarea.value;
-            
-            // If content contains HTML BBCode, ensure it's handled properly
-            if (content.includes('[html]')) {
-                console.log('Form being submitted with HTML BBCode content');
-            }
-        });
-    }
-});
-
 // Attempt to add toolbars immediately when the script loads
 setTimeout(() => {
     if (Markup && typeof Markup.addToolbarsToTextareas === 'function') {
         Markup.addToolbarsToTextareas();
     }
 }, 1000);
-
-// Create a helper function to handle HTML content display issues
-Markup.fixHtmlBBCodeElements = function() {
-    // Find all HTML BBCode containers
-    const htmlContainers = document.querySelectorAll('.bbcode-html-container');
-    
-    htmlContainers.forEach(container => {
-        // Make sure container is visible
-        container.style.display = 'block';
-        
-        // Check if the container has the 'fixed' data attribute
-        if (container.dataset.fixed === 'true') {
-            return; // Already fixed, skip
-        }
-        
-        // Mark as fixed
-        container.dataset.fixed = 'true';
-        
-        // Try to force a reflow to ensure HTML content renders properly
-        void container.offsetWidth;
-        
-        console.log('Fixed HTML BBCode container:', container.id);
-    });
-};
-
-// Run the fix on page load and after any content changes
-window.addEventListener('load', Markup.fixHtmlBBCodeElements);
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(Markup.fixHtmlBBCodeElements, 200);
-    setTimeout(Markup.fixHtmlBBCodeElements, 500);
-    setTimeout(Markup.fixHtmlBBCodeElements, 1000);
-});
-
-// Use MutationObserver to detect new BBCode HTML containers
-const htmlObserver = new MutationObserver(mutations => {
-    for (const mutation of mutations) {
-        if (mutation.type === 'childList' && mutation.addedNodes.length) {
-            // Check if any HTML containers were added
-            let containersAdded = false;
-            
-            mutation.addedNodes.forEach(node => {
-                if (node.nodeType === 1) { // Element node
-                    if (node.classList && node.classList.contains('bbcode-html-container')) {
-                        containersAdded = true;
-                    } else if (node.querySelectorAll) {
-                        const containers = node.querySelectorAll('.bbcode-html-container');
-                        if (containers.length > 0) {
-                            containersAdded = true;
-                        }
-                    }
-                }
-            });
-            
-            if (containersAdded) {
-                // Run the fix after a short delay
-                setTimeout(Markup.fixHtmlBBCodeElements, 100);
-            }
-        }
-    }
-});
-
-// Observe the document body for HTML container additions
-htmlObserver.observe(document.body, {
-    childList: true,
-    subtree: true
-});
-
-// This function can be called manually if needed
-Markup.refreshHtmlContent = function() {
-    console.log('Manual refresh of HTML BBCode containers');
-    Markup.fixHtmlBBCodeElements();
-};
-
-console.log('BBCode markup.js fully loaded and initialized');

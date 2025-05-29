@@ -139,6 +139,9 @@ const ActiveThreads = {
                 
                 // Add threads
                 topPosts.forEach(post => {
+                    // IMPORTANT: Create buttons programmatically instead of using innerHTML
+                    // This ensures proper binding of post IDs to event handlers
+                    
                     // Create thread item container
                     const threadItem = document.createElement('div');
                     threadItem.className = 'thread-item';
@@ -179,75 +182,40 @@ const ActiveThreads = {
                     threadInfo.appendChild(threadTitle);
                     threadInfo.appendChild(threadMeta);
                     
-                    // Create view button - IMPORTANT: Match the exact format of the main app's buttons
+                    // Create view button
                     const viewButton = document.createElement('button');
                     viewButton.className = 'btn btn-primary view-post';
-                    viewButton.setAttribute('data-id', post.id); // Set data-id attribute directly
+                    viewButton.dataset.id = post.id; // Set data-id attribute directly
                     viewButton.innerHTML = '<i class="fas fa-eye"></i> View';
                     
-                    // Add click event to view button - Using simplified approach
+                    // CRITICAL: Store the post ID in a closure to ensure it's correctly captured
+                    const currentPostId = post.id;
+                    
+                    // Add click event to view button - INLINE THE ACTION INSTEAD OF CALLING ANOTHER FUNCTION
                     viewButton.addEventListener('click', function(event) {
                         event.preventDefault();
+                        console.log('Viewing post with ID:', currentPostId);
                         
-                        // Keep track of which post we're trying to view
-                        const postId = post.id;
-                        const postTitle = post.title;
-                        console.log(`Viewing post: ${postTitle} (ID: ${postId})`);
-                        
-                        // Method 1: Try to find and click a post button in the main UI
-                        const mainPostButtons = document.querySelectorAll(`.post-card .view-post[data-id="${postId}"]`);
-                        if (mainPostButtons.length > 0) {
-                            console.log(`Found existing button for post "${postTitle}", clicking it`);
-                            mainPostButtons[0].click();
+                        // Find an existing view-post button in the main UI with this ID and click it
+                        const mainButtons = document.querySelectorAll(`.posts-container .view-post[data-id="${currentPostId}"]`);
+                        if (mainButtons.length > 0) {
+                            console.log('Clicking existing button with ID:', currentPostId);
+                            mainButtons[0].click();
                             return;
                         }
                         
-                        // Method 2: Click view category first, then the post
-                        const categoryBtn = container.closest('.category-card').querySelector('.view-category');
-                        if (categoryBtn) {
-                            console.log(`Navigating to category first, then post "${postTitle}"`);
-                            
-                            // Save the post ID we want to view
-                            window.sessionStorage.setItem('pendingPostView', postId);
-                            
-                            // Click category button to navigate to category page
-                            categoryBtn.click();
-                            
-                            // Setup a MutationObserver to watch for when post buttons appear
-                            const postsObserver = new MutationObserver((mutations, observer) => {
-                                // Look for post buttons with our ID
-                                const postBtn = document.querySelector(`.view-post[data-id="${postId}"]`);
-                                if (postBtn) {
-                                    console.log(`Post button for "${postTitle}" appeared, clicking it`);
-                                    observer.disconnect(); // Stop watching
-                                    postBtn.click(); // Click the button
-                                    window.sessionStorage.removeItem('pendingPostView');
-                                }
-                            });
-                            
-                            // Start watching for DOM changes
-                            postsObserver.observe(document.body, {
-                                childList: true,
-                                subtree: true
-                            });
-                            
-                            // Safety timeout - stop watching after 3 seconds
-                            setTimeout(() => {
-                                postsObserver.disconnect();
-                                // If we still haven't found the button, try hash navigation
-                                if (window.sessionStorage.getItem('pendingPostView') === postId) {
-                                    console.log(`Falling back to hash navigation for "${postTitle}"`);
-                                    window.location.hash = `post/${postId}`;
-                                    window.sessionStorage.removeItem('pendingPostView');
-                                }
-                            }, 3000);
-                            
-                            return;
+                        // If no main button exists, try direct App.viewPost call
+                        if (window.App && typeof window.App.viewPost === 'function') {
+                            console.log('Calling App.viewPost with ID:', currentPostId);
+                            try {
+                                window.App.viewPost(currentPostId);
+                            } catch (error) {
+                                console.error('Error calling App.viewPost:', error);
+                                alert('Unable to view the post at this time. Please navigate to the category first.');
+                            }
+                        } else {
+                            alert('Unable to view the post at this time. Please navigate to the category first.');
                         }
-                        
-                        // Method 3: Direct hash navigation
-                        console.log(`Using hash navigation for "${postTitle}"`);
-                        window.location.hash = `post/${postId}`;
                     });
                     
                     // Assemble thread item
@@ -392,26 +360,6 @@ const ActiveThreads = {
 
 // Initialize when DOM content is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    // Check if there's a pending post view from a previous navigation
-    const pendingPostId = window.sessionStorage.getItem('pendingPostView');
-    if (pendingPostId) {
-        console.log(`Found pending post view: ${pendingPostId}`);
-        // Look for the post button to click
-        setTimeout(() => {
-            const postBtn = document.querySelector(`.view-post[data-id="${pendingPostId}"]`);
-            if (postBtn) {
-                console.log(`Found pending post button, clicking it`);
-                postBtn.click();
-                window.sessionStorage.removeItem('pendingPostView');
-            } else {
-                // If button not found, try hash navigation
-                console.log(`Pending post button not found, trying hash navigation`);
-                window.location.hash = `post/${pendingPostId}`;
-                window.sessionStorage.removeItem('pendingPostView');
-            }
-        }, 500);
-    }
-    
     // Initialize the ActiveThreads module
     ActiveThreads.init();
 });
