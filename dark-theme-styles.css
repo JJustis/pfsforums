@@ -32,7 +32,48 @@
     --spoiler-bg: #f0f0f0;
     --button-hover: rgba(0, 0, 0, 0.05);
 }
+/* Add these CSS styles to your forum's stylesheet */
 
+/* Ownership warning styles */
+.paypal-transaction.ownership-error .paypal-header.warning {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-color: #f5c6cb;
+}
+
+.paypal-transaction.ownership-error .product-info {
+    background-color: #fff8f8;
+}
+
+/* Owner label */
+.product-owner {
+    display: inline-block;
+    margin-left: 10px;
+    padding: 2px 6px;
+    background-color: #e9f5ff;
+    border-radius: 4px;
+    border: 1px solid #cce5ff;
+    color: #004085;
+    font-size: 0.85em;
+}
+
+/* Highlight owner in product list */
+.product-card:has([data-owner]) {
+    position: relative;
+}
+
+.product-card:has([data-owner]):before {
+    content: "Your Product";
+    position: absolute;
+    top: -10px;
+    right: 10px;
+    background-color: #28a745;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.75em;
+    font-weight: bold;
+}
 /* Dark Theme Variables - Enhanced with Softer Colors */
 [data-theme="dark"] {
     /* Base colors */
@@ -117,7 +158,574 @@
     overflow: hidden;
     z-index: 1;
 }
+/* PayPal Transaction */
+.paypal-transaction {
+    margin: 15px 0;
+    border: 1px solid #0070ba;
+    border-radius: 8px;
+    overflow: hidden;
+}
 
+.paypal-header {
+    background-color: #0070ba;
+    color: white;
+    padding: 8px 15px;
+    font-weight: bold;
+}
+
+.paypal-content {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.product-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.product-name {
+    margin: 0;
+    font-size: 1.2em;
+    color: #333;
+}
+
+.product-price {
+    font-weight: bold;
+    font-size: 1.4em;
+    color: #0070ba;
+}
+
+.product-description {
+    color: #666;
+    line-height: 1.5;
+}
+
+.paypal-actions {
+    text-align: right;
+}
+
+.paypal-buy-button {
+    background-color: #0070ba;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.paypal-buy-button:hover {
+    background-color: #005ea6;
+}
+
+/* Transaction Receipt */
+.transaction-receipt {
+    background-color: #f8f8f8;
+    border-left: 4px solid #4CAF50;
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 0 4px 4px 0;
+}
+
+.receipt-header {
+    font-weight: bold;
+    color: #4CAF50;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.receipt-details {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.download-button {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    margin-top: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.download-button:hover {
+    background-color: #388E3C;
+}
+/* Digital Products section */
+.digital-products-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 25px;
+}
+
+@media (min-width: 992px) {
+  .digital-products-container {
+    grid-template-columns: 3fr 2fr;
+  }
+}
+
+.product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.product-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.product-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.product-list::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 10px;
+}
+
+.product-list::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}
+
+.product-card {
+  background-color: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  border: 1px solid #eee;
+  transition: box-shadow 0.2s;
+}
+
+.product-card:hover {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+.product-card-header {
+  padding: 15px;
+  background-color: #f8f8f8;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.product-card-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  max-width: 75%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.product-card-body {
+  padding: 15px;
+}
+
+.product-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.product-price {
+  font-weight: bold;
+  color: #2196F3;
+}
+
+.product-file, .product-date {
+  color: #777;
+}
+
+.product-card-footer {
+  background-color: #f8f8f8;
+  border-top: 1px solid #eee;
+  padding: 15px;
+}
+
+.product-code p {
+  margin-top: 0;
+  margin-bottom: 5px;
+  font-size: 13px;
+  color: #666;
+}
+
+.product-markup {
+  display: block;
+  background-color: #f1f1f1;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 10px;
+  font-family: monospace;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.copy-markup-btn {
+  font-size: 12px;
+}
+
+/* Upload product form */
+.upload-product-form {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  border: 1px solid #eee;
+  position: sticky;
+  top: 20px;
+}
+
+.upload-product-form h4 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 16px;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-product-form h4:before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 14px;
+  background-color: #2196F3;
+  border-radius: 2px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #666;
+}
+
+.form-control {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #333;
+  transition: border-color 0.2s;
+}
+
+.form-control:focus {
+  border-color: #2196F3;
+  outline: none;
+}
+
+.form-control-file {
+  width: 100%;
+  font-size: 14px;
+  color: #333;
+}
+
+.file-upload-progress {
+  margin-top: 10px;
+}
+
+.progress {
+  height: 6px;
+  background-color: #f5f5f5;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background-color: #2196F3;
+  border-radius: 3px;
+}
+
+#upload-product-btn {
+  width: 100%;
+  margin-top: 5px;
+}
+
+/* Empty states */
+.empty-message {
+  text-align: center;
+  padding: 30px;
+  color: #999;
+  font-style: italic;
+}
+
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30px;
+  color: #666;
+}
+
+.loading-spinner i {
+  margin-right: 10px;
+  color: #2196F3;
+}
+
+/* Error states */
+.error-message {
+  background-color: #FFEBEE;
+  border-left: 4px solid #F44336;
+  padding: 15px;
+  margin: 15px 0;
+  color: #D32F2F;
+}
+
+/* Delete profile button */
+#delete-profile-btn {
+  margin-top: 20px;
+  background-color: #f8f8f8;
+  color: #F44336;
+  border: 1px solid #F44336;
+}
+
+#delete-profile-btn:hover {
+  background-color: #F44336;
+  color: white;
+}
+
+/* Dark theme support */
+[data-theme="dark"] .profile-container {
+  background-color: #262626;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .profile-header {
+  border-bottom-color: #333;
+}
+
+[data-theme="dark"] #profile-username {
+  color: #eee;
+}
+
+[data-theme="dark"] .profile-section {
+  background-color: #2d2d2d;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .profile-section h3 {
+  color: #eee;
+}
+
+[data-theme="dark"] .detail-label {
+  color: #aaa;
+}
+
+[data-theme="dark"] .detail-value {
+  color: #ddd;
+}
+
+[data-theme="dark"] .activity-stat {
+  background-color: #333;
+}
+
+[data-theme="dark"] .activity-label {
+  color: #aaa;
+}
+
+[data-theme="dark"] .character-counter {
+  color: #aaa;
+}
+
+[data-theme="dark"] .product-card {
+  background-color: #333;
+  border-color: #444;
+}
+
+[data-theme="dark"] .product-card-header {
+  background-color: #2a2a2a;
+  border-bottom-color: #444;
+}
+
+[data-theme="dark"] .product-card-header h4 {
+  color: #eee;
+}
+
+[data-theme="dark"] .product-file, 
+[data-theme="dark"] .product-date {
+  color: #bbb;
+}
+
+[data-theme="dark"] .product-card-footer {
+  background-color: #2a2a2a;
+  border-top-color: #444;
+}
+
+[data-theme="dark"] .product-code p {
+  color: #bbb;
+}
+
+[data-theme="dark"] .product-markup {
+  background-color: #222;
+  color: #eee;
+}
+
+[data-theme="dark"] .upload-product-form {
+  background-color: #333;
+  border-color: #444;
+}
+
+[data-theme="dark"] .form-control {
+  background-color: #222;
+  border-color: #444;
+  color: #eee;
+}
+
+[data-theme="dark"] .form-control:focus {
+  border-color: #2196F3;
+}
+
+[data-theme="dark"] .progress {
+  background-color: #222;
+}
+
+[data-theme="dark"] .empty-message {
+  color: #777;
+}
+
+[data-theme="dark"] .loading-spinner {
+  color: #bbb;
+}
+
+[data-theme="dark"] #delete-profile-btn {
+  background-color: #222;
+}
+Key Improvements
+.product-markup {
+    display: block;
+    background-color: #eee;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    white-space: pre;
+    overflow-x: auto;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.copy-markup-btn {
+    font-size: 0.85em;
+}
+
+.upload-product-form {
+    background-color: #f8f8f8;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+.file-upload-progress {
+    margin-top: 10px;
+}
+
+.progress {
+    height: 5px;
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: #2196F3;
+    transition: width 0.2s ease;
+}
+
+/* Dark theme support */
+[data-theme="dark"] .product-card {
+    background-color: #2d2d2d;
+    border-color: #444;
+}
+
+[data-theme="dark"] .product-card-header {
+    background-color: #333;
+    border-color: #444;
+}
+
+[data-theme="dark"] .product-card-header h4 {
+    color: #eee;
+}
+
+[data-theme="dark"] .product-card-body p {
+    color: #bbb;
+}
+
+[data-theme="dark"] .product-file, 
+[data-theme="dark"] .product-date {
+    color: #aaa;
+}
+
+[data-theme="dark"] .product-card-footer {
+    background-color: #333;
+    border-color: #444;
+}
+
+[data-theme="dark"] .product-code p {
+    color: #bbb;
+}
+
+[data-theme="dark"] .product-markup {
+    background-color: #222;
+    color: #eee;
+}
+
+[data-theme="dark"] .upload-product-form {
+    background-color: #333;
+    border-color: #444;
+}
+/* Dark theme support */
+[data-theme="dark"] .paypal-transaction {
+    border-color: #0070ba;
+}
+
+[data-theme="dark"] .product-name {
+    color: #eee;
+}
+
+[data-theme="dark"] .product-description {
+    color: #bbb;
+}
+
+[data-theme="dark"] .transaction-receipt {
+    background-color: rgba(76, 175, 80, 0.1);
+}
 /* Sheen effect for dark mode */
 [data-theme="dark"] .forum-container::before {
     content: "";
@@ -185,7 +793,62 @@
         opacity: 1;
     }
 }
+.freechat-online-users {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    max-height: 60px;
+    overflow-y: auto;
+    transition: max-height 0.3s ease;
+}
 
+.freechat-online-users.collapsed {
+    max-height: 25px;
+    overflow: hidden;
+}
+
+.freechat-online-users-header {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--primary-color, #2196F3);
+}
+
+.freechat-online-users-header i {
+    transition: transform 0.3s ease;
+}
+
+.freechat-online-users.collapsed .freechat-online-users-header i {
+    transform: rotate(-90deg);
+}
+
+.freechat-online-users-list {
+    margin-top: 5px;
+    padding-left: 5px;
+}
+
+.online-user {
+    display: inline-block;
+    margin-right: 10px;
+    white-space: nowrap;
+}
+
+.online-user i {
+    color: var(--success-color, #4CAF50);
+    margin-right: 3px;
+}
+
+.online-user.admin i {
+    color: var(--warning-color, #FFC107);
+}
+
+/* Dark theme support */
+[data-theme="dark"] .freechat-online-users {
+    background-color: rgba(0, 0, 0, 0.1);
+    border-color: var(--border-color, #363A4F);
+}
 /* Modal with special styling */
 [data-theme="dark"] .modal-container {
     background-color: var(--card-bg);
@@ -194,14 +857,19 @@
     border-radius: 8px;
     overflow: hidden;
 }
-
+[data-theme="dark"] .forum-header {
+	  background-image: url('https://jcmc.serveminecraft.net/dashboard/uploads/banner-2.png');
+  background-size: cover;       /* Make it cover the whole area */
+  background-repeat: no-repeat; /* Don't tile the image */
+  background-position: center;  /* Center the image */
+}
 [data-theme="dark"] .modal-header,
 [data-theme="dark"] .modal-footer {
     background-color: var(--grey-400);
     border-color: var(--grey-300);
 }
 [data-theme="dark"] .category-card{
-border-left: 4px solid var(--primary-color);
+	border-left: 4px solid #6876C4;
 }
 /* Secondary backgrounds with elegant styling */
 [data-theme="dark"] .category-card,

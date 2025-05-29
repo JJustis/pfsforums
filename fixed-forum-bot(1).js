@@ -1,56 +1,22 @@
-// Enhanced forum-bot.js with Pretrained NLP Model Integration
+// forum-bot.js - Self-contained version that auto-initializes
 (function() {
     // Make ForumBot available globally
     window.ForumBot = {
         // Configuration
         serverConfig: {
             codeBot: {
-                url: 'https://jcmc.serveminecraft.net:8044/talk',
-                port: 8044, 
+                url: 'http://jcmc.serveminecraft.net:8043/talk', // FIXED: Port 8043 for code bot
+                port: 8043, 
                 status: 'unknown',
-                forceHttp: false
+                forceHttp: true
             },
             chatBot: {
-                url: 'https://jcmc.serveminecraft.net:8043/talk',
-                port: 8043,
+                url: 'http://jcmc.serveminecraft.net:8044/talk', // FIXED: Port 8044 for chat bot AND fixed domain typo
+                port: 8044,
                 status: 'unknown',
-                forceHttp: false
+                forceHttp: true
             },
-            // Enhanced NLP with downloadable model
-            nlpEngine: {
-                status: 'unknown',
-                enabled: true,
-                initialized: false,
-                model: null,
-                tokenizer: null,
-                modelConfig: {
-                    // Default model configuration
-                    modelUrl: 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/models/distilgpt2/',
-                    vocabUrl: 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/models/distilgpt2/vocab.json',
-                    mergesUrl: 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/models/distilgpt2/merges.txt',
-                    configUrl: 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/models/distilgpt2/config.json',
-                    // Alternative models can be specified here
-                    alternateModels: [
-                        {
-                            name: 'gpt2-small',
-                            modelUrl: 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/models/gpt2/',
-                            vocabUrl: 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/models/gpt2/vocab.json',
-                            mergesUrl: 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/models/gpt2/merges.txt',
-                            configUrl: 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/models/gpt2/config.json'
-                        },
-                        {
-                            name: 'dialogpt-small',
-                            modelUrl: 'https://huggingface.co/microsoft/DialoGPT-small/resolve/main/pytorch_model.bin',
-                            vocabUrl: 'https://huggingface.co/microsoft/DialoGPT-small/resolve/main/vocab.json',
-                            mergesUrl: 'https://huggingface.co/microsoft/DialoGPT-small/resolve/main/merges.txt',
-                            configUrl: 'https://huggingface.co/microsoft/DialoGPT-small/resolve/main/config.json'
-                        }
-                    ]
-                },
-                contextSystem: null,
-                responseGenerator: null
-            },
-            timeout: 100000,
+            timeout: 10000,
             // Fallback mode when servers are offline
             fallbackMode: {
                 enabled: true,
@@ -82,453 +48,30 @@
             const botContainers = document.querySelectorAll('.forum-bot-container');
             console.log('Found', botContainers.length, 'bot containers');
             
-            // Initialize NLP engine with pretrained model
-            this.initializeNLPEngine()
+            // Check server status first
+            this.checkServerStatus()
                 .then(() => {
-                    console.log('NLP engine initialized successfully');
-                    this.serverConfig.nlpEngine.status = 'online';
-                    this.serverConfig.nlpEngine.initialized = true;
+                    // Initialize each bot after checking server status
+                    botContainers.forEach((container) => {
+                        this.initializeBot(container);
+                    });
+                    
+                    console.log('All bots initialized after server status check');
                 })
-                .catch(error => {
-                    console.error('Error initializing NLP engine:', error);
-                    this.serverConfig.nlpEngine.status = 'offline';
-                })
-                .finally(() => {
-                    // Check server status
-                    this.checkServerStatus()
-                        .then(() => {
-                            // Initialize each bot after checking server status
-                            botContainers.forEach((container) => {
-                                this.initializeBot(container);
-                            });
-                            
-                            console.log('All bots initialized after server status check');
-                        })
-                        .catch((error) => {
-                            console.warn('Server status check failed:', error);
-                            console.log('Initializing bots in offline mode');
-                            
-                            // Initialize bots anyway, status will show as offline
-                            botContainers.forEach((container) => {
-                                this.initializeBot(container);
-                            });
-                        });
+                .catch((error) => {
+                    console.warn('Server status check failed:', error);
+                    console.log('Initializing bots in offline mode');
+                    
+                    // Initialize bots anyway, status will show as offline
+                    botContainers.forEach((container) => {
+                        this.initializeBot(container);
+                    });
                 });
             
             console.log('Forum Bot initialization complete');
             
             // Set up periodic server status checks
             setInterval(() => this.checkServerStatus(), 60000); // Check every minute
-        },
-        
-        // Initialize NLP Engine with pretrained model
-        initializeNLPEngine: function() {
-            return new Promise((resolve, reject) => {
-                // Check if we already have the minimal TensorFlow.js needed
-                if (window.tf) {
-                    console.log('TensorFlow.js already loaded');
-                    // Don't check for transformers here, setupNLPEngine will handle it
-                    this.setupNLPEngine()
-                        .then(resolve)
-                        .catch(error => {
-                            console.warn('Failed to setup NLP engine with transformers, using fallback:', error);
-                            this.setupFallbackNLPEngine()
-                                .then(resolve)
-                                .catch(reject);
-                        });
-                    return;
-                }
-                
-                console.log('Loading NLP dependencies...');
-                
-                // Try to load TensorFlow.js first (more critical)
-                const tfScript = document.createElement('script');
-                tfScript.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js';
-                tfScript.async = true;
-                
-                tfScript.onload = () => {
-                    console.log('TensorFlow.js loaded successfully');
-                    
-                    // Now try to load transformers.js
-                    const transformersScript = document.createElement('script');
-                    transformersScript.src = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/dist/transformers.min.js';
-                    transformersScript.async = true;
-                    
-                    transformersScript.onload = () => {
-                        console.log('Transformers.js loaded successfully');
-                        // Slightly longer delay to ensure library is fully initialized
-                        setTimeout(() => {
-                            this.setupNLPEngine()
-                                .then(resolve)
-                                .catch(error => {
-                                    console.warn('Failed to setup NLP engine with transformers, using fallback:', error);
-                                    this.setupFallbackNLPEngine()
-                                        .then(resolve)
-                                        .catch(reject);
-                                });
-                        }, 1000);
-                    };
-                    
-                    transformersScript.onerror = () => {
-                        console.error('Failed to load Transformers.js');
-                        // If transformers fails to load, use fallback
-                        this.setupFallbackNLPEngine()
-                            .then(resolve)
-                            .catch(reject);
-                    };
-                    
-                    document.head.appendChild(transformersScript);
-                };
-                
-                tfScript.onerror = () => {
-                    console.error('Failed to load TensorFlow.js');
-                    // If even TensorFlow fails, use the most basic fallback
-                    this.setupFallbackNLPEngine()
-                        .then(resolve)
-                        .catch(reject);
-                };
-                
-                document.head.appendChild(tfScript);
-            });
-        },
-        
-        // Setup the NLP engine with a pretrained model
-        setupNLPEngine: async function() {
-            try {
-                console.log('Setting up NLP engine with pretrained model...');
-                
-                // Check for pipeline in the proper namespace - Xenova/transformers uses different global naming
-                const pipelineExists = typeof window.pipeline === 'function' || 
-                                      (window.transformers && typeof window.transformers.pipeline === 'function') ||
-                                      (window.Xenova && window.Xenova.transformers && 
-                                       typeof window.Xenova.transformers.pipeline === 'function');
-                
-                if (!pipelineExists) {
-                    console.warn('Transformers.js pipeline not found in expected global objects');
-                    console.log('Checking available globals that might contain transformers:', 
-                               Object.keys(window).filter(key => 
-                                   typeof window[key] === 'object' && window[key] !== null
-                               ));
-                    throw new Error('Transformers.js library not properly initialized');
-                }
-                
-                // Create context management system
-                const contextSystem = {
-                    conversationHistory: [],
-                    maxHistoryLength: 10,
-                    
-                    // Add message to conversation history
-                    addMessage: function(role, content) {
-                        this.conversationHistory.push({
-                            role: role, // 'user' or 'assistant'
-                            content: content,
-                            timestamp: Date.now()
-                        });
-                        
-                        // Trim history if it gets too long
-                        if (this.conversationHistory.length > this.maxHistoryLength) {
-                            this.conversationHistory.shift();
-                        }
-                    },
-                    
-                    // Get formatted conversation context for the model
-                    getFormattedContext: function() {
-                        return this.conversationHistory.map(msg => 
-                            `${msg.role === 'user' ? 'Human' : 'Assistant'}: ${msg.content}`
-                        ).join('\n');
-                    },
-                    
-                    // Clear conversation history
-                    clearHistory: function() {
-                        this.conversationHistory = [];
-                    }
-                };
-                
-                // Initialize model and tokenizer
-                let pipeline = null;
-                
-                // Try to load the model using transformers.js - checking all possible global locations
-                let transformersPipeline = null;
-                if (typeof window.pipeline === 'function') {
-                    transformersPipeline = window.pipeline;
-                } else if (window.transformers && typeof window.transformers.pipeline === 'function') {
-                    transformersPipeline = window.transformers.pipeline;
-                } else if (window.Xenova && window.Xenova.transformers && 
-                           typeof window.Xenova.transformers.pipeline === 'function') {
-                    transformersPipeline = window.Xenova.transformers.pipeline;
-                }
-                
-                if (transformersPipeline) {
-                    try {
-                        console.log('Loading pretrained NLP model...');
-                        
-                        // Use the pipeline API
-                        pipeline = await transformersPipeline(
-                            'text-generation',
-                            'Xenova/distilgpt2'
-                        );
-                        
-                        console.log('Pretrained model loaded successfully!');
-                    } catch (modelError) {
-                        console.error('Error loading model via pipeline:', modelError);
-                        throw modelError;
-                    }
-                } else {
-                    throw new Error('Transformers.js pipeline function not found');
-                }
-                
-                // Create response generator
-                const responseGenerator = {
-                    // Generate response using the pretrained model
-                    generateResponse: async function(input) {
-                        // Add user input to context
-                        contextSystem.addMessage('user', input);
-                        
-                        try {
-                            const context = contextSystem.getFormattedContext();
-                            let generatedText = "";
-                            
-                            // Generate response using pipeline
-                            if (pipeline) {
-                                const result = await pipeline(context + '\nAssistant:', {
-                                    max_new_tokens: 100,
-                                    temperature: 0.7,
-                                    top_p: 0.9,
-                                    do_sample: true,
-                                    pad_token_id: 50256 // EOS token for GPT-2
-                                });
-                                
-                                generatedText = result[0].generated_text;
-                            } else {
-                                throw new Error('No model available for generation');
-                            }
-                            
-                            // Extract assistant's response from generated text
-                            const assistantPrefix = 'Assistant:';
-                            const assistantIndex = generatedText.lastIndexOf(assistantPrefix);
-                            
-                            if (assistantIndex !== -1) {
-                                generatedText = generatedText.substring(assistantIndex + assistantPrefix.length).trim();
-                                
-                                // Remove any follow-up "Human:" part if present
-                                const nextHumanIndex = generatedText.indexOf('Human:');
-                                if (nextHumanIndex !== -1) {
-                                    generatedText = generatedText.substring(0, nextHumanIndex).trim();
-                                }
-                                
-                                // If we got a valid response, add it to history
-                                if (generatedText && generatedText.length > 0) {
-                                    contextSystem.addMessage('assistant', generatedText);
-                                    return generatedText;
-                                }
-                            }
-                            
-                            // Fallback for when extraction fails
-                            throw new Error('Failed to extract response from generated text');
-                        } catch (error) {
-                            console.error('Error generating response:', error);
-                            
-                            // Use fallback response generation
-                            return this.generateFallbackResponse(input);
-                        }
-                    },
-                    
-                    // Generate fallback response when model fails
-                    generateFallbackResponse: function(input) {
-                        // Simple fallback responses
-                        const responses = [
-                            "I understand your message about " + (input.split(' ').slice(-3).join(' ')) + ". Can you tell me more?",
-                            "That's an interesting point. Could you elaborate further?",
-                            "I'm processing what you said about " + (input.split(' ').slice(0, 3).join(' ')) + ". What else would you like to discuss?",
-                            "I see what you mean. How can I assist you further with this topic?",
-                            "Thanks for sharing that. Is there anything specific you'd like to know or discuss?"
-                        ];
-                        
-                        const response = responses[Math.floor(Math.random() * responses.length)];
-                        contextSystem.addMessage('assistant', response);
-                        return response;
-                    },
-                    
-                    // Apply post-processing to improve response quality
-                    enhanceResponse: function(input, response) {
-                        // Ensure response isn't too short
-                        if (response.length < 10) {
-                            const enhancements = [
-                                "Let me elaborate on that. ",
-                                "To explain further, ",
-                                "In other words, "
-                            ];
-                            response = enhancements[Math.floor(Math.random() * enhancements.length)] + response;
-                        }
-                        
-                        // Check if response actually addresses the input
-                        const isQuestion = input.includes('?');
-                        if (isQuestion && !response.includes('?') && !response.toLowerCase().includes('yes') && 
-                            !response.toLowerCase().includes('no') && response.length < 50) {
-                            response += " Does that answer your question? If not, I can provide more details.";
-                        }
-                        
-                        // Ensure coherent ending
-                        if (response.endsWith(',') || response.endsWith(';')) {
-                            response = response.slice(0, -1) + '.';
-                        }
-                        
-                        return response;
-                    }
-                };
-                
-                // Store components in config
-                this.serverConfig.nlpEngine.pipeline = pipeline;
-                this.serverConfig.nlpEngine.contextSystem = contextSystem;
-                this.serverConfig.nlpEngine.responseGenerator = responseGenerator;
-                
-                console.log('NLP engine setup complete');
-                
-                // Return success
-                return Promise.resolve();
-            } catch (error) {
-                console.error('Error setting up NLP engine:', error);
-                return Promise.reject(error);
-            }
-        },
-        
-        // Setup a fallback NLP engine when transformers.js fails
-        setupFallbackNLPEngine: async function() {
-            try {
-                console.log('Setting up fallback NLP engine...');
-                
-                // Create a simple context system
-                const contextSystem = {
-                    conversationHistory: [],
-                    maxHistoryLength: 10,
-                    
-                    // Add message to conversation history
-                    addMessage: function(role, content) {
-                        this.conversationHistory.push({
-                            role: role, 
-                            content: content,
-                            timestamp: Date.now()
-                        });
-                        
-                        if (this.conversationHistory.length > this.maxHistoryLength) {
-                            this.conversationHistory.shift();
-                        }
-                    },
-                    
-                    getFormattedContext: function() {
-                        return this.conversationHistory.map(msg => 
-                            `${msg.role === 'user' ? 'Human' : 'Assistant'}: ${msg.content}`
-                        ).join('\n');
-                    },
-                    
-                    clearHistory: function() {
-                        this.conversationHistory = [];
-                    }
-                };
-                
-                // Create a simple pattern-based response generator
-                const responseGenerator = {
-                    // Pre-defined patterns and responses
-                    patterns: [
-                        { regex: /hello|hi|hey/i, responses: ["Hello! How can I help you today?", "Hi there! What can I do for you?", "Hey! How can I assist you?"] },
-                        { regex: /how are you/i, responses: ["I'm doing well, thank you for asking! How about you?", "I'm fine, thanks! How can I help you today?"] },
-                        { regex: /thank|thanks/i, responses: ["You're welcome!", "Happy to help!", "My pleasure!"] },
-                        { regex: /bye|goodbye/i, responses: ["Goodbye! Feel free to return if you have more questions.", "See you later!", "Take care!"] },
-                        { regex: /help/i, responses: ["I'd be happy to help. What do you need assistance with?", "How can I assist you today?"] },
-                        { regex: /\?$/i, responses: ["That's a good question. Let me think about that.", "Interesting question. Based on my understanding...", "I'll do my best to answer that."] },
-                        { regex: /code|programming|javascript|python|html|css/i, responses: ["Are you working on a coding project? I can try to help with that.", "Programming can be challenging! What specific aspect are you working on?"] },
-                        { regex: /error|bug|issue|problem/i, responses: ["Sorry to hear you're experiencing issues. Can you provide more details?", "Let's troubleshoot this together. What exactly is happening?"] }
-                    ],
-                    
-                    // Generate response based on patterns
-                    generateResponse: async function(input) {
-                        contextSystem.addMessage('user', input);
-                        
-                        // First, try to match a pattern
-                        for (const pattern of this.patterns) {
-                            if (pattern.regex.test(input)) {
-                                const responses = pattern.responses;
-                                const response = responses[Math.floor(Math.random() * responses.length)];
-                                contextSystem.addMessage('assistant', response);
-                                return response;
-                            }
-                        }
-                        
-                        // If no pattern matches, use contextual fallback
-                        return this.generateContextualResponse(input);
-                    },
-                    
-                    // Generate a contextual response based on input
-                    generateContextualResponse: function(input) {
-                        // Extract keywords (simple implementation)
-                        const keywords = input
-                            .toLowerCase()
-                            .replace(/[^\w\s]/g, '')
-                            .split(/\s+/)
-                            .filter(word => word.length > 3);
-                        
-                        // Generate response based on keywords
-                        let response;
-                        
-                        if (keywords.length > 0) {
-                            // Pick a random keyword from the input
-                            const keyword = keywords[Math.floor(Math.random() * keywords.length)];
-                            
-                            const templates = [
-                                `I see you're interested in ${keyword}. Can you tell me more about what you'd like to know?`,
-                                `${keyword} is an interesting topic. What specific aspects are you curious about?`,
-                                `Regarding ${keyword}, could you provide more details about your question?`,
-                                `I'd be happy to discuss ${keyword} further. What would you like to know?`
-                            ];
-                            
-                            response = templates[Math.floor(Math.random() * templates.length)];
-                        } else {
-                            // Generic responses if no keywords found
-                            const genericResponses = [
-                                "Could you please provide more details about your question?",
-                                "I'm not sure I fully understood. Could you elaborate?",
-                                "That's interesting. Can you tell me more?",
-                                "I'd like to help you better. Can you give me more information?"
-                            ];
-                            
-                            response = genericResponses[Math.floor(Math.random() * genericResponses.length)];
-                        }
-                        
-                        contextSystem.addMessage('assistant', response);
-                        return response;
-                    },
-                    
-                    // Apply enhancements to responses
-                    enhanceResponse: function(input, response) {
-                        // Add personalization based on context
-                        if (contextSystem.conversationHistory.length > 2) {
-                            // Check if this is a follow-up question
-                            const prevUserMessage = contextSystem.conversationHistory
-                                .filter(msg => msg.role === 'user')
-                                .slice(-2, -1)[0];
-                            
-                            if (prevUserMessage && input.length < 20) {
-                                response = `Continuing our discussion about ${prevUserMessage.content.split(' ').slice(0, 3).join(' ')}... ${response}`;
-                            }
-                        }
-                        
-                        return response;
-                    }
-                };
-                
-                // Store components in config
-                this.serverConfig.nlpEngine.pipeline = null; // No transformer pipeline in fallback
-                this.serverConfig.nlpEngine.contextSystem = contextSystem;
-                this.serverConfig.nlpEngine.responseGenerator = responseGenerator;
-                
-                console.log('Fallback NLP engine setup complete');
-                
-                // Return success
-                return Promise.resolve();
-            } catch (error) {
-                console.error('Error setting up fallback NLP engine:', error);
-                return Promise.reject(error);
-            }
         },
         
         // Check if both Python servers are online
@@ -558,14 +101,12 @@
                         this.updateBotStatusIndicator(container);
                     });
                     
-                    // Consider success if at least one server is online or NLP engine is enabled
+                    // Consider success if at least one server is online
                     const anyServerOnline = results.some(r => r.status === 'fulfilled' && r.value);
-                    const nlpEngineOnline = this.serverConfig.nlpEngine.status === 'online';
-                    
-                    if (anyServerOnline || nlpEngineOnline) {
+                    if (anyServerOnline) {
                         resolve(true);
                     } else {
-                        reject(new Error('All servers are offline and NLP engine is not available'));
+                        reject(new Error('All servers are offline'));
                     }
                 })
                 .catch((error) => {
@@ -714,34 +255,6 @@
                     statusElement.innerHTML = '<i class="fas fa-sync fa-spin"></i> Checking server...';
                 }
                 
-                // Add NLP mode toggle - add to existing toggle group or create new if needed
-                const toggleContainer = container.querySelector('.bot-type-toggle');
-                if (toggleContainer) {
-                    // Check if NLP toggle already exists
-                    const existingNlpToggle = toggleContainer.querySelector('input[value="nlp"]');
-                    if (!existingNlpToggle) {
-                        // Create new toggle label
-                        const nlpToggle = document.createElement('label');
-                        nlpToggle.className = 'toggle-label';
-                        nlpToggle.innerHTML = `
-                            <input type="radio" name="bot-type-${botId}" value="nlp">
-                            <span>NLP Model</span>
-                        `;
-                        toggleContainer.appendChild(nlpToggle);
-                        
-                        // Add event listener for the new toggle
-                        nlpToggle.querySelector('input').addEventListener('change', (e) => {
-                            if (e.target.checked) {
-                                container.dataset.type = 'nlp';
-                                this.updateBotStatusIndicator(container);
-                                
-                                // Add a system message about bot type change
-                                this.addSystemMessage(messagesContainer, 'Switched to Pretrained NLP Model mode');
-                            }
-                        });
-                    }
-                }
-                
                 // Update status indicator based on server status
                 this.updateBotStatusIndicator(container);
                 
@@ -772,16 +285,7 @@
                             this.updateBotStatusIndicator(container);
                             
                             // Add a system message about bot type change
-                            let modeText = e.target.value === 'auto' ? 'automatic' : e.target.value;
-                            modeText = modeText === 'nlp' ? 'Pretrained NLP Model' : modeText;
-                            this.addSystemMessage(messagesContainer, `Switched to ${modeText} mode`);
-                            
-                            // Clear conversation history if switching to NLP mode
-                            if (e.target.value === 'nlp' && 
-                                this.serverConfig.nlpEngine.contextSystem) {
-                                this.serverConfig.nlpEngine.contextSystem.clearHistory();
-                                this.addSystemMessage(messagesContainer, 'Conversation history cleared');
-                            }
+                            this.addSystemMessage(messagesContainer, `Switched to ${e.target.value === 'auto' ? 'automatic' : e.target.value} mode`);
                         }
                     });
                 });
@@ -791,32 +295,14 @@
                 // Check if servers are available and add appropriate initial message
                 const isCodeServerOffline = this.serverConfig.codeBot.status === 'offline';
                 const isChatServerOffline = this.serverConfig.chatBot.status === 'offline';
-                const isNlpEngineOnline = this.serverConfig.nlpEngine.status === 'online';
                 
                 // Add initial message based on server status
-                if (botType === 'nlp') {
-                    if (isNlpEngineOnline) {
-                        this.addSystemMessage(messagesContainer, 'Connected in Pretrained NLP Model mode');
-                        this.addMessage(messagesContainer, "Hello! I'm running on a pretrained NLP model. How can I help you today?", 'bot');
-                    } else {
-                        this.addSystemMessage(messagesContainer, 'NLP Model mode not available');
-                        this.addMessage(messagesContainer, "NLP Model mode is not available. The model failed to initialize. Switching to fallback mode.", 'bot');
-                    }
-                } else if ((botType === 'code' && isCodeServerOffline) || 
+                if ((botType === 'code' && isCodeServerOffline) || 
                     (botType === 'chat' && isChatServerOffline) || 
                     (botType === 'auto' && isCodeServerOffline && isChatServerOffline)) {
                     
-                    if (isNlpEngineOnline) {
-                        this.addSystemMessage(messagesContainer, `Remote servers are offline. Switched to NLP Model mode.`);
-                        this.addMessage(messagesContainer, "Remote servers appear to be unavailable. I've switched to NLP Model mode powered by a pretrained transformer model. How can I help you?", 'bot');
-                        // Auto-switch to NLP mode when servers are offline
-                        container.dataset.type = 'nlp';
-                        container.querySelector('input[value="nlp"]').checked = true;
-                        this.updateBotStatusIndicator(container);
-                    } else {
-                        this.addSystemMessage(messagesContainer, `Connected in ${botType === 'auto' ? 'automatic' : botType} mode (offline)`);
-                        this.addMessage(messagesContainer, "I'm currently in offline mode. The server appears to be unavailable. Basic forum features are still accessible.", 'bot');
-                    }
+                    this.addSystemMessage(messagesContainer, `Connected in ${botType === 'auto' ? 'automatic' : botType} mode (offline)`);
+                    this.addMessage(messagesContainer, "I'm currently in offline mode. The server appears to be unavailable. Basic forum features are still accessible.", 'bot');
                 } else {
                     this.addSystemMessage(messagesContainer, `Connected in ${botType === 'auto' ? 'automatic' : botType} mode`);
                 }
@@ -844,16 +330,7 @@
                 let status = 'unknown';
                 let statusText = 'Unknown';
                 
-                // Handle NLP mode
-                if (botType === 'nlp') {
-                    if (this.serverConfig.nlpEngine.status === 'online') {
-                        status = 'online';
-                        statusText = 'NLP Model Active';
-                    } else {
-                        status = 'offline';
-                        statusText = 'NLP Model Unavailable';
-                    }
-                } else if (botType === 'code') {
+                if (botType === 'code') {
                     // For code bot, check code server status
                     if (this.serverConfig.codeBot.status === 'offline') {
                         status = 'offline';
@@ -897,8 +374,7 @@
                 // If status is still unknown but we've checked servers, default to offline
                 if (status === 'unknown' && 
                     (this.serverConfig.codeBot.status !== 'unknown' || 
-                     this.serverConfig.chatBot.status !== 'unknown' ||
-                     this.serverConfig.nlpEngine.status !== 'unknown')) {
+                     this.serverConfig.chatBot.status !== 'unknown')) {
                     status = 'offline';
                     statusText = 'Connection Error';
                 }
@@ -928,19 +404,6 @@
                 // Add user message to chat
                 this.addMessage(messagesContainer, message, 'user');
                 
-                // Check if we should use NLP mode
-                if (botType === 'nlp') {
-                    if (this.serverConfig.nlpEngine.status === 'online') {
-                        // Use NLP engine with pretrained model
-                        this.processWithNLPEngine(messagesContainer, message);
-                        return;
-                    } else {
-                        // NLP mode is unavailable
-                        this.addSystemMessage(messagesContainer, 'NLP Model mode unavailable. Falling back to server mode.');
-                        // Fall through to server processing
-                    }
-                }
-                
                 // Determine which server to use based on message and bot type
                 let server;
                 const isCodeQuery = message.trim().startsWith('#');
@@ -953,13 +416,6 @@
                 
                 // Check if server is offline
                 if (server.status === 'offline') {
-                    // Check if NLP engine is available as a fallback
-                    if (this.serverConfig.nlpEngine.status === 'online') {
-                        this.addSystemMessage(messagesContainer, 'Server offline. Using NLP Model mode.');
-                        this.processWithNLPEngine(messagesContainer, message);
-                        return;
-                    }
-                    
                     // Use fallback mode if enabled
                     if (this.serverConfig.fallbackMode.enabled) {
                         // Get random response based on bot type
@@ -1007,13 +463,6 @@
                         // Remove thinking indicator
                         this.removeThinkingIndicator(thinkingId);
                         
-                        // Try NLP model if available
-                        if (this.serverConfig.nlpEngine.status === 'online') {
-                            this.addSystemMessage(messagesContainer, 'Server error. Falling back to NLP Model mode.');
-                            this.processWithNLPEngine(messagesContainer, message);
-                            return;
-                        }
-                        
                         // Add friendly error message
                         if (this.serverConfig.fallbackMode.enabled) {
                             // Get fallback response
@@ -1034,65 +483,6 @@
                     });
             } catch (error) {
                 console.error('Error in sendMessage:', error);
-            }
-        },
-        
-        // Process a message with the NLP engine
-        processWithNLPEngine: function(messagesContainer, message) {
-            try {
-                if (!this.serverConfig.nlpEngine.initialized) {
-                    this.addSystemMessage(messagesContainer, 'NLP Model not initialized');
-                    return;
-                }
-                
-                // Show thinking indicator
-                const thinkingId = this.addThinkingIndicator(messagesContainer);
-                
-                // Get the NLP engine components
-                const { responseGenerator } = this.serverConfig.nlpEngine;
-                
-                // Process message with NLP engine - handle both async and sync versions
-                const processResponse = (response) => {
-                    try {
-                        // Apply enhancements to improve response quality
-                        response = responseGenerator.enhanceResponse(message, response);
-                        
-                        // Remove thinking indicator
-                        this.removeThinkingIndicator(thinkingId);
-                        
-                        // Add bot response to chat
-                        this.addMessage(messagesContainer, response, 'bot');
-                    } catch (error) {
-                        console.error('Error processing response:', error);
-                        this.removeThinkingIndicator(thinkingId);
-                        this.addMessage(messagesContainer, "I encountered an error processing your message. Let's try again.", 'bot');
-                    }
-                };
-                
-                // Check if generateResponse returns a Promise or direct value
-                const result = responseGenerator.generateResponse(message);
-                if (result instanceof Promise) {
-                    result.then(processResponse)
-                        .catch(error => {
-                            console.error('Error processing with NLP engine:', error);
-                            this.removeThinkingIndicator(thinkingId);
-                            
-                            // Use fallback response
-                            const fallbackResponse = responseGenerator.generateFallbackResponse ?
-                                responseGenerator.generateFallbackResponse(message) :
-                                "I'm having trouble generating a response right now. Could you try asking in a different way?";
-                                
-                            this.addMessage(messagesContainer, fallbackResponse, 'bot');
-                        });
-                } else {
-                    // Handle synchronous response (fallback mode)
-                    setTimeout(() => {
-                        processResponse(result);
-                    }, 500); // Add small delay to simulate thinking
-                }
-            } catch (error) {
-                console.error('Error in processWithNLPEngine:', error);
-                this.addSystemMessage(messagesContainer, 'Error processing with NLP Model');
             }
         },
         
@@ -1420,12 +810,8 @@
                 background-color: #2196F3; /* Auto - Blue */
             }
             
-            .toggle-label:nth-child(3) input:checked + span {
+            .toggle-label:last-child input:checked + span {
                 background-color: #FF9800; /* Code - Orange */
-            }
-            
-            .toggle-label:nth-child(4) input:checked + span {
-                background-color: #9C27B0; /* NLP - Purple */
             }
             
             .toggle-label span {
@@ -1627,22 +1013,6 @@
                 font-style: italic;
             }
             
-            /* Model download progress bar */
-            .model-download-progress {
-                height: 5px;
-                background-color: #f0f0f0;
-                border-radius: 3px;
-                margin: 8px 0;
-                overflow: hidden;
-            }
-            
-            .model-download-progress .progress-bar {
-                height: 100%;
-                background-color: #2196F3;
-                width: 0%;
-                transition: width 0.3s;
-            }
-            
             /* Dark theme support */
             [data-theme="dark"] .forum-bot-container {
                 border-color: #444;
@@ -1707,200 +1077,13 @@
                 color: #aaa;
                 border-color: #444;
             }
-            
-            [data-theme="dark"] .model-download-progress {
-                background-color: #444;
-            }
         `;
         
         document.head.appendChild(styleEl);
     }
     
-    // Add model information modal
-    function addModelInfoModal() {
-        // Check if modal already exists
-        if (document.getElementById('nlp-model-info-modal')) {
-            return;
-        }
-        
-        const modalEl = document.createElement('div');
-        modalEl.id = 'nlp-model-info-modal';
-        modalEl.className = 'nlp-model-modal';
-        modalEl.style.display = 'none';
-        
-        modalEl.innerHTML = `
-            <div class="nlp-model-modal-content">
-                <span class="nlp-model-close">&times;</span>
-                <h2>Pretrained NLP Model Information</h2>
-                <div class="nlp-model-info">
-                    <p><strong>Current Model:</strong> <span id="current-model-name">distilgpt2</span></p>
-                    <p><strong>Model Size:</strong> <span id="current-model-size">~300MB</span></p>
-                    <p><strong>Status:</strong> <span id="current-model-status">Loading...</span></p>
-                    
-                    <div class="model-download-progress">
-                        <div class="progress-bar" id="model-download-progress-bar"></div>
-                    </div>
-                    
-                    <h3>Available Models</h3>
-                    <div class="model-selection">
-                        <label>
-                            <input type="radio" name="nlp-model" value="distilgpt2" checked>
-                            distilgpt2 (Smaller, faster)
-                        </label>
-                        <label>
-                            <input type="radio" name="nlp-model" value="gpt2-small">
-                            GPT-2 Small (Better quality)
-                        </label>
-                        <label>
-                            <input type="radio" name="nlp-model" value="dialogpt-small">
-                            DialoGPT Small (Dialog-specific)
-                        </label>
-                    </div>
-                    
-                    <button id="change-model-btn" class="change-model-btn">Change Model</button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modalEl);
-        
-        // Add styles for modal
-        const modalStyles = document.createElement('style');
-        modalStyles.textContent = `
-            .nlp-model-modal {
-                display: none;
-                position: fixed;
-                z-index: 1000;
-                left: 0;
-                top: 0;
-                width: 100%;
-                height: 100%;
-                overflow: auto;
-                background-color: rgba(0,0,0,0.4);
-            }
-            
-            .nlp-model-modal-content {
-                background-color: #fefefe;
-                margin: 10% auto;
-                padding: 20px;
-                border: 1px solid #888;
-                width: 80%;
-                max-width: 500px;
-                border-radius: 8px;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            }
-            
-            .nlp-model-close {
-                color: #aaa;
-                float: right;
-                font-size: 28px;
-                font-weight: bold;
-                cursor: pointer;
-            }
-            
-            .nlp-model-close:hover {
-                color: #333;
-            }
-            
-            .nlp-model-info {
-                margin-top: 20px;
-            }
-            
-            .model-selection {
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                margin: 15px 0;
-            }
-            
-            .model-selection label {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                cursor: pointer;
-            }
-            
-            .change-model-btn {
-                background-color: #2196F3;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-weight: bold;
-                margin-top: 10px;
-            }
-            
-            .change-model-btn:hover {
-                background-color: #0d8bf2;
-            }
-            
-            [data-theme="dark"] .nlp-model-modal-content {
-                background-color: #333;
-                color: #eee;
-                border-color: #555;
-            }
-            
-            [data-theme="dark"] .nlp-model-close {
-                color: #ccc;
-            }
-            
-            [data-theme="dark"] .nlp-model-close:hover {
-                color: #fff;
-            }
-        `;
-        
-        document.head.appendChild(modalStyles);
-        
-        // Add event listeners for modal
-        const closeBtn = document.querySelector('.nlp-model-close');
-        closeBtn.addEventListener('click', () => {
-            modalEl.style.display = 'none';
-        });
-        
-        // Close modal when clicking outside
-        window.addEventListener('click', (event) => {
-            if (event.target === modalEl) {
-                modalEl.style.display = 'none';
-            }
-        });
-        
-        // Add model change button functionality
-        const changeModelBtn = document.getElementById('change-model-btn');
-        changeModelBtn.addEventListener('click', () => {
-            const selectedModel = document.querySelector('input[name="nlp-model"]:checked').value;
-            
-            // Update model status display
-            document.getElementById('current-model-status').textContent = 'Downloading...';
-            document.getElementById('current-model-name').textContent = selectedModel;
-            
-            // Show progress bar animation (this would be replaced with actual progress in a real implementation)
-            const progressBar = document.getElementById('model-download-progress-bar');
-            progressBar.style.width = '0%';
-            
-            let progress = 0;
-            const progressInterval = setInterval(() => {
-                progress += Math.random() * 10;
-                if (progress > 100) {
-                    progress = 100;
-                    clearInterval(progressInterval);
-                    
-                    // Simulate model loading completion
-                    setTimeout(() => {
-                        document.getElementById('current-model-status').textContent = 'Active';
-                        // In a real implementation, we would trigger the actual model change here
-                    }, 500);
-                }
-                progressBar.style.width = progress + '%';
-            }, 300);
-        });
-    }
-    
     // Add styles
     addBotStyles();
-    
-    // Add model info modal
-    addModelInfoModal();
     
     // Auto-initialize after a short delay to ensure DOM is ready
     setTimeout(() => {

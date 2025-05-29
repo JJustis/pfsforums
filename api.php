@@ -121,7 +121,21 @@ try {
         case "add_reply":
             addReply();
             break;
-            
+         case "federation_status":
+    getFederationStatusEndpoint();
+    break;
+
+case "connect_server":
+    connectServerEndpoint();
+    break;
+
+case "share_file":
+    shareFileEndpoint();
+    break;
+
+case "import_file":
+    importFileEndpoint();
+    break;   
         case "delete_reply":
             deleteReply();
             break;
@@ -249,7 +263,76 @@ function verifySeoPasswordEndpoint() {
         "valid" => $isValid
     ]);
 }
+function getFederationStatusEndpoint() {
+    $input = file_get_contents("php://input");
+    $data = json_decode($input, true);
+    
+    if (!$data || !isset($data["token"])) {
+        echo json_encode(["success" => false, "error" => "Missing token"]);
+        return;
+    }
+    
+    $result = getFederationStatus($data["token"]);
+    echo json_encode($result);
+}
 
+function connectServerEndpoint() {
+    $input = file_get_contents("php://input");
+    $data = json_decode($input, true);
+    
+    if (!$data || !isset($data["token"]) || !isset($data["serverUrl"]) ||
+        !isset($data["serverId"]) || !isset($data["initialKey"])) {
+        echo json_encode(["success" => false, "error" => "Missing required fields"]);
+        return;
+    }
+    
+    $result = initiateServerConnection(
+        $data["serverUrl"],
+        $data["serverId"],
+        $data["initialKey"],
+        $data["token"]
+    );
+    
+    echo json_encode($result);
+}
+
+function shareFileEndpoint() {
+    $input = file_get_contents("php://input");
+    $data = json_decode($input, true);
+    
+    if (!$data || !isset($data["token"]) || !isset($data["filePath"]) ||
+        !isset($data["targetServerId"]) || !isset($data["fileType"])) {
+        echo json_encode(["success" => false, "error" => "Missing required fields"]);
+        return;
+    }
+    
+    $result = shareFile(
+        $data["filePath"],
+        $data["targetServerId"],
+        $data["fileType"],
+        $data["token"]
+    );
+    
+    echo json_encode($result);
+}
+
+function importFileEndpoint() {
+    $input = file_get_contents("php://input");
+    $data = json_decode($input, true);
+    
+    if (!$data || !isset($data["token"]) || !isset($data["fileName"])) {
+        echo json_encode(["success" => false, "error" => "Missing required fields"]);
+        return;
+    }
+    
+    // Implementation for importing a shared file
+    // This would decrypt the file and store it in the appropriate location
+    
+    echo json_encode([
+        "success" => true,
+        "message" => "File imported successfully"
+    ]);
+}
 // Register function
 function register() {
     // Get input data

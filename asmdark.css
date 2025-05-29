@@ -1,0 +1,96 @@
+/* Dark Theme Styles */
+[data-theme="dark"] .asm-container,
+.dark-theme .asm-container {
+    background-color: #1e1e2d;
+    border-color: #2d2d3f;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .asm-header,
+.dark-theme .asm-header {
+    background-color: #2d2d3f;
+    border-color: #3f3f5a;
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .asm-title,
+.dark-theme .asm-title {
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .asm-placeholder,
+.dark-theme .asm-placeholder {
+    background-color: #1e1e2d;
+    border-color: #2d2d3f;
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .asm-code-area,
+.dark-theme .asm-code-area {
+    background-color: #121218;
+    border-color: #2d2d3f;
+}
+
+[data-theme="dark"] .asm-execution-area,
+.dark-theme .asm-execution-area {
+    background-color: #1e1e2d;
+}
+
+[data-theme="dark"] .asm-registers-view h4, 
+[data-theme="dark"] .asm-output-view h4, 
+[data-theme="dark"] .asm-memory-view h4,
+.dark-theme .asm-registers-view h4, 
+.dark-theme .asm-output-view h4, 
+.dark-theme .asm-memory-view h4 {
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .asm-register,
+.dark-theme .asm-register {
+    background-color: #2d2d3f;
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .register-name,
+.dark-theme .register-name {
+    color: #61afef;
+}
+
+[data-theme="dark"] .asm-memory-address,
+.dark-theme .asm-memory-address {
+    background-color: #2d2d3f;
+    border-color: #3f3f5a;
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .asm-memory-grid,
+.dark-theme .asm-memory-grid {
+    border-color: #3f3f5a;
+}
+
+[data-theme="dark"] .asm-memory-header,
+.dark-theme .asm-memory-header {
+    background-color: #2d2d3f;
+}
+
+[data-theme="dark"] .asm-memory-cell,
+.dark-theme .asm-memory-cell {
+    border-color: #3f3f5a;
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .asm-output,
+.dark-theme .asm-output {
+    background-color: #121218;
+    color: #4caf50;
+}
+
+[data-theme="dark"] .asm-canvas-container canvas,
+.dark-theme .asm-canvas-container canvas {
+    border-color: #3f3f5a;
+}
+
+[data-theme="dark"] .loading-spinner,
+.dark-theme .loading-spinner {
+    color: #aaa;
+}

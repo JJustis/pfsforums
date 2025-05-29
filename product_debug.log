@@ -1,0 +1,172 @@
+[2025-05-18 04:58:06] Request received: {"action":"list","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 04:58:06] Returning 0 products
+[2025-05-18 05:02:19] Request received: {"action":"list","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 05:02:19] Returning 0 products
+[2025-05-18 05:03:33] Request received: {"action":"list","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 05:03:33] Returning 1 products
+[2025-05-18 05:04:48] Request received: {"action":"list","token":"eyJ1c2VySWQiOiJhMmMwZjdhNTM5MDVhYTFkYWNjMzdiY2ZhYzk2MTIyZCIsImV4cCI6MTc0ODEyOTg2OCwiaWF0IjoxNzQ3NTI1MDY4fQ=="}
+[2025-05-18 05:04:48] Returning 1 products
+[2025-05-18 06:20:56] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 06:20:56] Filtering products for owner: admin
+[2025-05-18 06:20:56] Found 2 products for admin
+[2025-05-18 06:21:17] Request received: {"action":"list","username":"pikerus","token":"eyJ1c2VySWQiOiJhMmMwZjdhNTM5MDVhYTFkYWNjMzdiY2ZhYzk2MTIyZCIsImV4cCI6MTc0ODEyOTg2OCwiaWF0IjoxNzQ3NTI1MDY4fQ=="}
+[2025-05-18 06:21:17] Filtering products for owner: pikerus
+[2025-05-18 06:21:17] Found 0 products for pikerus
+[2025-05-18 06:21:58] Request received: {"action":"delete"}
+[2025-05-18 06:21:58] Delete operation requested (mock response)
+[2025-05-18 06:21:58] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 06:21:58] Filtering products for owner: admin
+[2025-05-18 06:21:58] Found 2 products for admin
+[2025-05-18 06:22:01] Request received: {"action":"delete"}
+[2025-05-18 06:22:01] Delete operation requested (mock response)
+[2025-05-18 06:22:01] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 06:22:01] Filtering products for owner: admin
+[2025-05-18 06:22:01] Found 2 products for admin
+[2025-05-18 06:22:42] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 06:22:42] Filtering products for owner: admin
+[2025-05-18 06:22:42] Found 3 products for admin
+[2025-05-18 06:26:02] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 06:26:02] Filtering products for owner: admin
+[2025-05-18 06:26:02] Found 3 products for admin
+[2025-05-18 06:26:11] Request received: {"action":"delete"}
+[2025-05-18 06:26:11] Delete operation requested (mock response)
+[2025-05-18 06:26:11] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 06:26:11] Filtering products for owner: admin
+[2025-05-18 06:26:11] Found 3 products for admin
+[2025-05-18 06:26:53] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 06:26:53] Filtering products for owner: admin
+[2025-05-18 06:26:53] Found 3 products for admin
+[2025-05-18 06:37:47] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 06:37:47] Filtering products for owner: admin
+[2025-05-18 06:37:47] Found 3 products for admin
+[2025-05-18 06:42:08] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 06:42:08] Filtering products for owner: admin
+[2025-05-18 06:42:08] Found 3 products for admin
+[2025-05-18 06:55:36] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 06:55:36] Filtering products for owner: admin
+[2025-05-18 06:55:36] Found 3 products for admin
+[2025-05-18 08:12:08] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 08:12:08] Filtering products for owner: admin
+[2025-05-18 08:12:08] Found 3 products for admin
+[2025-05-18 08:41:58] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 08:41:58] Filtering products for owner: admin
+[2025-05-18 08:41:58] Found 3 products for admin
+[2025-05-18 08:43:45] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 08:43:45] Filtering products for owner: admin
+[2025-05-18 08:43:45] Found 3 products for admin
+[2025-05-18 08:51:44] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 08:51:44] Filtering products for owner: admin
+[2025-05-18 08:51:44] Found 3 products for admin
+[2025-05-18 09:11:53] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 09:11:53] Filtering products for owner: admin
+[2025-05-18 09:11:53] Found 3 products for admin
+[2025-05-18 10:37:47] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 10:37:47] Filtering products for owner: admin
+[2025-05-18 10:37:47] Found 3 products for admin
+[2025-05-18 10:44:02] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 10:44:02] Filtering products for owner: admin
+[2025-05-18 10:44:02] Found 3 products for admin
+[2025-05-18 10:44:18] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 10:44:18] Filtering products for owner: admin
+[2025-05-18 10:44:18] Found 3 products for admin
+[2025-05-18 10:44:54] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 10:44:54] Filtering products for owner: admin
+[2025-05-18 10:44:54] Found 3 products for admin
+[2025-05-18 10:46:50] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 10:46:50] Filtering products for owner: admin
+[2025-05-18 10:46:50] Found 3 products for admin
+[2025-05-18 10:48:55] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 10:48:55] Filtering products for owner: admin
+[2025-05-18 10:48:55] Found 3 products for admin
+[2025-05-18 10:50:02] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 10:50:02] Filtering products for owner: admin
+[2025-05-18 10:50:02] Found 3 products for admin
+[2025-05-18 10:50:28] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 10:50:28] Filtering products for owner: admin
+[2025-05-18 10:50:28] Found 3 products for admin
+[2025-05-18 10:51:03] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 10:51:03] Filtering products for owner: admin
+[2025-05-18 10:51:03] Found 3 products for admin
+[2025-05-18 10:54:46] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 10:54:46] Filtering products for owner: admin
+[2025-05-18 10:54:46] Found 3 products for admin
+[2025-05-18 11:02:14] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 11:02:14] Filtering products for owner: admin
+[2025-05-18 11:02:14] Found 3 products for admin
+[2025-05-18 11:02:20] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 11:02:20] Filtering products for owner: admin
+[2025-05-18 11:02:20] Found 3 products for admin
+[2025-05-18 19:54:42] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 19:54:42] Filtering products for owner: admin
+[2025-05-18 19:54:42] Found 3 products for admin
+[2025-05-18 20:55:52] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 20:55:52] Filtering products for owner: admin
+[2025-05-18 20:55:52] Found 3 products for admin
+[2025-05-18 20:57:04] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 20:57:04] Filtering products for owner: admin
+[2025-05-18 20:57:04] Found 3 products for admin
+[2025-05-18 21:11:30] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 21:11:30] Filtering products for owner: admin
+[2025-05-18 21:11:30] Found 3 products for admin
+[2025-05-18 21:11:46] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 21:11:46] Filtering products for owner: admin
+[2025-05-18 21:11:46] Found 3 products for admin
+[2025-05-18 21:15:53] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 21:15:53] Filtering products for owner: admin
+[2025-05-18 21:15:53] Found 3 products for admin
+[2025-05-18 21:17:13] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 21:17:13] Filtering products for owner: admin
+[2025-05-18 21:17:13] Found 3 products for admin
+[2025-05-18 21:33:08] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 21:33:08] Filtering products for owner: admin
+[2025-05-18 21:33:08] Found 3 products for admin
+[2025-05-18 21:33:31] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 21:33:31] Filtering products for owner: admin
+[2025-05-18 21:33:31] Found 3 products for admin
+[2025-05-18 21:35:43] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 21:35:43] Filtering products for owner: admin
+[2025-05-18 21:35:43] Found 3 products for admin
+[2025-05-18 21:37:13] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 21:37:13] Filtering products for owner: admin
+[2025-05-18 21:37:13] Found 3 products for admin
+[2025-05-18 21:42:33] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 21:42:33] Filtering products for owner: admin
+[2025-05-18 21:42:33] Found 3 products for admin
+[2025-05-18 21:49:02] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 21:49:02] Filtering products for owner: admin
+[2025-05-18 21:49:02] Found 3 products for admin
+[2025-05-18 21:51:02] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 21:51:02] Filtering products for owner: admin
+[2025-05-18 21:51:02] Found 3 products for admin
+[2025-05-18 22:32:28] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 22:32:28] Filtering products for owner: admin
+[2025-05-18 22:32:28] Found 3 products for admin
+[2025-05-19 00:00:18] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODIwNjU5MSwiaWF0IjoxNzQ3NjAxNzkxfQ=="}
+[2025-05-19 00:00:18] Filtering products for owner: admin
+[2025-05-19 00:00:18] Found 3 products for admin
+[2025-05-19 06:04:54] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODIwNjU5MSwiaWF0IjoxNzQ3NjAxNzkxfQ=="}
+[2025-05-19 06:04:54] Filtering products for owner: admin
+[2025-05-19 06:04:54] Found 3 products for admin
+[2025-05-19 06:27:58] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODIwNjU5MSwiaWF0IjoxNzQ3NjAxNzkxfQ=="}
+[2025-05-19 06:27:58] Filtering products for owner: admin
+[2025-05-19 06:27:58] Found 3 products for admin
+[2025-05-19 07:32:01] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODIwNjU5MSwiaWF0IjoxNzQ3NjAxNzkxfQ=="}
+[2025-05-19 07:32:01] Filtering products for owner: admin
+[2025-05-19 07:32:01] Found 3 products for admin
+[2025-05-19 07:40:42] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODIwNjU5MSwiaWF0IjoxNzQ3NjAxNzkxfQ=="}
+[2025-05-19 07:40:42] Filtering products for owner: admin
+[2025-05-19 07:40:42] Found 3 products for admin
+[2025-05-19 23:54:53] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODIwNjU5MSwiaWF0IjoxNzQ3NjAxNzkxfQ=="}
+[2025-05-19 23:54:53] Filtering products for owner: admin
+[2025-05-19 23:54:53] Found 3 products for admin
+[2025-05-23 03:36:23] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODIwNjU5MSwiaWF0IjoxNzQ3NjAxNzkxfQ=="}
+[2025-05-23 03:36:23] Filtering products for owner: admin
+[2025-05-23 03:36:23] Found 3 products for admin
+[2025-05-23 03:36:35] Request received: {"action":"delete"}
+[2025-05-23 03:36:35] Delete operation requested (mock response)
+[2025-05-23 03:36:36] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODIwNjU5MSwiaWF0IjoxNzQ3NjAxNzkxfQ=="}
+[2025-05-23 03:36:36] Filtering products for owner: admin
+[2025-05-23 03:36:36] Found 3 products for admin
+[2025-05-24 04:43:57] Request received: {"action":"list","username":"admin","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODIwNjU5MSwiaWF0IjoxNzQ3NjAxNzkxfQ=="}
+[2025-05-24 04:43:57] Filtering products for owner: admin
+[2025-05-24 04:43:57] Found 3 products for admin

@@ -1,0 +1,28 @@
+[2025-05-18 05:03:33] Request received: {"productName":"PFS Forum","productDescription":"Security wise forum software","productPrice":"9.99","username":"admin","email":"admin@admin.com","user_id":"391be23105c66930cf4a2813b87f177b","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 05:03:33] Files: {"productFile":{"name":"pfsforumpaid.zip","type":"application\/x-zip-compressed","tmp_name":"C:\\portablexampp\\tmp\\phpBE2B.tmp","error":0,"size":2692802}}
+[2025-05-18 05:03:33] Using user: {"id":"391be23105c66930cf4a2813b87f177b","username":"admin","email":"admin@admin.com"}
+[2025-05-18 05:03:33] Generated product ID: prod_dc9114d4b6982b3a
+[2025-05-18 05:03:33] File moved to: uploads/products/prod_dc9114d4b6982b3a.zip
+[2025-05-18 05:03:33] Product saved: {"id":"prod_dc9114d4b6982b3a","name":"PFS Forum","description":"Security wise forum software","price":9.99,"file_name":"pfsforumpaid.zip","file_path":"uploads\/products\/prod_dc9114d4b6982b3a.zip","file_size":2692802,"seller_id":"391be23105c66930cf4a2813b87f177b","seller_email":"admin@admin.com","seller_username":"admin","created_at":"2025-05-18 05:03:33"}
+[2025-05-18 05:03:33] Upload completed successfully
+[2025-05-18 05:14:24] Request received: {"productName":"PFS Forum","productDescription":"Security wise forum software","productPrice":"9.99","username":"admin","email":"admin@admin.com","user_id":"391be23105c66930cf4a2813b87f177b","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 05:14:24] Files: {"productFile":{"name":"pfsforumpaid.zip","type":"application\/x-zip-compressed","tmp_name":"C:\\portablexampp\\tmp\\phpAF47.tmp","error":0,"size":2692802}}
+[2025-05-18 05:14:24] Using user: {"id":"391be23105c66930cf4a2813b87f177b","username":"admin","email":"admin@admin.com"}
+[2025-05-18 05:14:24] Generated product ID: prod_6d0efc7d58d17ed3
+[2025-05-18 05:14:24] File moved to: uploads/products/prod_6d0efc7d58d17ed3.zip
+[2025-05-18 05:14:24] Product saved with owner: admin
+[2025-05-18 05:14:24] Upload completed successfully
+[2025-05-18 05:18:28] Request received: {"productName":"CVEs Site","productDescription":"s","productPrice":"9.99","username":"admin","email":"admin@admin.com","user_id":"391be23105c66930cf4a2813b87f177b","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 05:18:28] Files: {"productFile":{"name":"httpd.zip","type":"application\/x-zip-compressed","tmp_name":"C:\\portablexampp\\tmp\\php62F9.tmp","error":0,"size":7132713}}
+[2025-05-18 05:18:28] Using user: {"id":"391be23105c66930cf4a2813b87f177b","username":"admin","email":"admin@admin.com"}
+[2025-05-18 05:18:28] Generated product ID: prod_1eba4d18ba6c2959
+[2025-05-18 05:18:28] File moved to: uploads/products/prod_1eba4d18ba6c2959.zip
+[2025-05-18 05:18:28] Product saved with owner: admin
+[2025-05-18 05:18:28] Upload completed successfully
+[2025-05-18 06:22:42] Request received: {"productName":"PFS Forums","productDescription":"Security Wise Forums","productPrice":"9.99","username":"admin","email":"admin@admin.com","user_id":"391be23105c66930cf4a2813b87f177b","token":"eyJ1c2VySWQiOiIzOTFiZTIzMTA1YzY2OTMwY2Y0YTI4MTNiODdmMTc3YiIsImV4cCI6MTc0ODE0MDUyNiwiaWF0IjoxNzQ3NTM1NzI2fQ=="}
+[2025-05-18 06:22:42] Files: {"productFile":{"name":"pfsforumfinal.zip","type":"application\/x-zip-compressed","tmp_name":"C:\\portablexampp\\tmp\\php2A19.tmp","error":0,"size":14763691}}
+[2025-05-18 06:22:42] Using user: {"id":"391be23105c66930cf4a2813b87f177b","username":"admin","email":"admin@admin.com"}
+[2025-05-18 06:22:42] Generated product ID: prod_e5b599a0d4995d21
+[2025-05-18 06:22:42] File moved to: uploads/products/prod_e5b599a0d4995d21.zip
+[2025-05-18 06:22:42] Product saved with owner: admin
+[2025-05-18 06:22:42] Upload completed successfully

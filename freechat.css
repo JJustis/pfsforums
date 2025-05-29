@@ -1,0 +1,299 @@
+/* freechat.css - Styling for the secure chat widget */
+
+/* Main Chat Widget Container */
+.freechat-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    width: 350px;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    overflow: hidden;
+    background-color: var(--card-bg, #ffffff);
+    transition: all 0.3s ease;
+    border: 1px solid var(--border-color, #e0e0e0);
+    display: flex;
+    flex-direction: column;
+    max-height: 500px;
+    font-family: var(--font-main, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
+}
+
+/* Widget when collapsed */
+.freechat-widget.collapsed {
+    height: 50px;
+    width: 200px;
+}
+
+/* Header styles */
+.freechat-header {
+    background: linear-gradient(135deg, var(--primary-dark, #8D3287), var(--primary-dark, #9019D2));
+    color: var(--text-light, #FFFFFF);
+    padding: 12px 15px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.freechat-header i {
+    margin-right: 8px;
+}
+
+.freechat-toggle {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 16px;
+    opacity: 0.9;
+    transition: opacity 0.2s;
+}
+
+.freechat-toggle:hover {
+    opacity: 1;
+}
+
+/* Security status indicator */
+.freechat-security {
+    display: flex;
+    align-items: center;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    background-color: rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+    color: var(--secondary-color, #607D8B);
+}
+
+.freechat-security.encrypted {
+    color: var(--success-color, #4CAF50);
+}
+
+.freechat-security i {
+    margin-right: 5px;
+}
+
+/* Chat content area */
+.freechat-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+    max-height: calc(500px - 50px - 60px); /* Total height - header - input area */
+}
+
+.freechat-body.hidden {
+    max-height: 0;
+}
+
+/* Messages container */
+.freechat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    background-color: var(--card-secondary-bg, #f9f9f9);
+}
+
+.freechat-messages ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* Message styling */
+.freechat-message {
+    margin-bottom: 10px;
+    position: relative;
+    clear: both;
+    max-width: 85%;
+}
+
+.freechat-message.outgoing {
+    float: right;
+    background-color: var(--primary-color, #2196F3);
+    color: white;
+    border-radius: 15px 2px 15px 15px;
+    padding: 8px 12px;
+}
+
+.freechat-message.incoming {
+    float: left;
+    background-color: var(--grey-300, #e0e0e0);
+    color: var(--text-color, #333333);
+    border-radius: 2px 15px 15px 15px;
+    padding: 8px 12px;
+}
+
+.freechat-message .username {
+    font-weight: bold;
+    font-size: 0.8em;
+    margin-bottom: 3px;
+}
+
+.freechat-message .timestamp {
+    font-size: 0.7em;
+    opacity: 0.7;
+    margin-top: 3px;
+    text-align: right;
+}
+
+/* Message clearfix */
+.freechat-messages ul::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+/* Input area */
+.freechat-input {
+    display: flex;
+    padding: 10px;
+    background-color: var(--card-bg, #ffffff);
+    border-top: 1px solid var(--border-color, #e0e0e0);
+}
+
+.freechat-input input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color, #e0e0e0);
+    border-radius: 20px;
+    background-color: var(--light-color, #F5F5F5);
+    margin-right: 8px;
+    transition: border-color 0.2s;
+}
+
+.freechat-input input:focus {
+    outline: none;
+    border-color: var(--primary-color, #2196F3);
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.freechat-input button {
+    background-color: var(--primary-color, #2196F3);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.freechat-input button:hover {
+    background-color: var(--primary-dark, #1976D2);
+}
+
+/* Admin badge styling */
+.admin-badge {
+    background-color: var(--warning-color, #FFC107);
+    color: var(--dark-color, #212121);
+    font-size: 0.65em;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+
+/* System message styling */
+.system-message {
+    text-align: center;
+    margin: 10px 0;
+    font-size: 0.8em;
+    color: var(--secondary-color, #607D8B);
+    clear: both;
+}
+
+/* Status indicator */
+.user-status {
+    font-size: 0.8em;
+    color: var(--secondary-color, #607D8B);
+}
+
+.user-status.online {
+    color: var(--success-color, #4CAF50);
+}
+
+.user-status.offline {
+    color: var(--danger-color, #F44336);
+}
+
+/* Typing indicator */
+.typing-indicator {
+    display: none;
+    padding: 5px 10px;
+    margin: 10px 0;
+    font-size: 0.8em;
+    font-style: italic;
+    color: var(--secondary-color, #607D8B);
+    clear: both;
+}
+
+.typing-indicator.active {
+    display: block;
+}
+
+.typing-dots {
+    display: inline-block;
+}
+
+.typing-dots::after {
+    content: '...';
+    animation: typing-dots 1.5s infinite;
+}
+
+@keyframes typing-dots {
+    0%, 20% { content: '.'; }
+    40% { content: '..'; }
+    60%, 100% { content: '...'; }
+}
+
+/* Encryption animation */
+.encryption-icon {
+    display: inline-block;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.7; }
+    50% { opacity: 1; }
+    100% { opacity: 0.7; }
+}
+
+/* Dark theme support */
+[data-theme="dark"] .freechat-widget {
+    border-color: var(--border-color, #363A4F);
+}
+
+[data-theme="dark"] .freechat-message.incoming {
+    background-color: var(--grey-400, #282C3E);
+    color: var(--text-color, #DADFE9);
+}
+
+[data-theme="dark"] .freechat-input input {
+    background-color: var(--grey-500, #252836);
+    color: var(--text-color, #DADFE9);
+    border-color: var(--grey-300, #2E3347);
+}
+
+/* Responsive styles */
+@media (max-width: 576px) {
+    .freechat-widget {
+        width: calc(100% - 40px);
+        right: 20px;
+        left: 20px;
+        bottom: 10px;
+    }
+    
+    .freechat-widget.collapsed {
+        width: 200px;
+        right: 20px;
+        left: auto;
+    }
+}

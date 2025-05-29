@@ -1,0 +1,15 @@
+[
+    {
+        "id": "prod_5fe2fc18cf256c9f",
+        "name": "PFS-Forum",
+        "description": "The Paid Version of this very Forum...",
+        "price": 9.99,
+        "file_path": "secure_uploads\/1\/1e41c53671167f670c58761b62ff4765.zip",
+        "file_name": "pfsforumpaid.zip",
+        "file_size": 1344801,
+        "owner_id": 1,
+        "owner_email": "",
+        "created_at": "2025-05-18 04:31:05",
+        "updated_at": "2025-05-18 04:31:05"
+    }
+]

@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forum Bot Test Page</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1, h2, h3 {
+            color: #2196F3;
+        }
+        
+        .test-section {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            background-color: #f9f9f9;
+        }
+        
+        .bbcode-example {
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin: 10px 0;
+        }
+        
+        .note {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px 15px;
+            margin: 15px 0;
+        }
+        
+        /* Include forum-bot.css content here */
+        /* Forum Bot Styles */
+        .forum-bot-container {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 15px 0;
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            font-family: inherit;
+        }
+
+        .forum-bot-header {
+            background-color: #f5f5f5;
+            padding: 10px 15px;
+            border-bottom: 1px solid #e0e0e0;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .forum-bot-header i {
+            margin-right: 8px;
+            color: #2196F3;
+        }
+
+        /* Bot type toggle styles */
+        .bot-type-toggle {
+            display: flex;
+            border-radius: 15px;
+            overflow: hidden;
+            background-color: #e0e0e0;
+            margin-left: auto;
+            border: 1px solid #ccc;
+        }
+
+        .toggle-label {
+            padding: 3px 8px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            margin: 0;
+            transition: background-color 0.2s;
+        }
+
+        .toggle-label input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            height: 0;
+            width: 0;
+        }
+
+        .toggle-label input:checked + span {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .toggle-label:first-child input:checked + span {
+            background-color: #4CAF50; /* Chat - Green */
+        }
+
+        .toggle-label:nth-child(2) input:checked + span {
+            background-color: #2196F3; /* Auto - Blue */
+        }
+
+        .toggle-label:last-child input:checked + span {
+            background-color: #FF9800; /* Code - Orange */
+        }
+
+        .toggle-label span {
+            padding: 3px 8px;
+            border-radius: 12px;
+        }
+
+        /* Bot status styles */
+        .bot-status {
+            margin-left: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Forum bot messages container */
+        .forum-bot-messages {
+            height: 250px;
+            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .bot-message, .user-message {
+            display: flex;
+            max-width: 80%;
+        }
+
+        .user-message {
+            margin-left: auto;
+            flex-direction: row-reverse;
+        }
+
+        .bot-avatar {
+            width: 36px;
+            height: 36px;
+            background-color: #2196F3;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            margin-right: 8px;
+        }
+
+        .user-message .bot-avatar {
+            margin-right: 0;
+            margin-left: 8px;
+        }
+
+        .message-content {
+            background-color: #f1f1f1;
+            padding: 10px 15px;
+            border-radius: 18px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            line-height: 1.4;
+        }
+
+        .user-message .message-content {
+            background-color: #e3f2fd;
+        }
+
+        /* System messages */
+        .system-message {
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+            margin: 8px 0;
+            font-style: italic;
+        }
+
+        /* Thinking animation */
+        .thinking-dots {
+            display: inline-flex;
+            gap: 4px;
+        }
+
+        .thinking-dots .dot {
+            width: 8px;
+            height: 8px;
+            background-color: #888;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        .thinking-dots .dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .thinking-dots .dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes pulse {
+            0%, 60%, 100% {
+                transform: scale(1);
+                opacity: 0.4;
+            }
+            20% {
+                transform: scale(1.2);
+                opacity: 1;
+            }
+        }
+
+        /* Code styles */
+        .code-block {
+            background-color: #282c34;
+            color: #abb2bf;
+            border-radius: 6px;
+            padding: 10px;
+            margin: 8px 0;
+            overflow-x: auto;
+            font-family: monospace;
+            max-width: 100%;
+        }
+
+        .inline-code {
+            background-color: #f0f0f0;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 85%;
+        }
+
+        /* Input area */
+        .forum-bot-input {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #e0e0e0;
+            background-color: #f9f9f9;
+        }
+
+        .forum-bot-input textarea {
+            flex-grow: 1;
+            border: 1px solid #e0e0e0;
+            border-radius: 18px;
+            padding: 8px 15px;
+            resize: none;
+            height: 38px;
+            outline: none;
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        .bot-send-btn {
+            width: 38px;
+            height: 38px;
+            border: none;
+            background-color: #2196F3;
+            color: white;
+            border-radius: 50%;
+            margin-left: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+
+        .bot-send-btn:hover {
+            background-color: #1976D2;
+        }
+
+        /* Footer with connection status */
+        .forum-bot-footer {
+            padding: 8px 15px;
+            background-color: #f5f5f5;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .bot-status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .bot-status-indicator i {
+            font-size: 10px;
+        }
+
+        .status-online {
+            color: #4CAF50;
+        }
+
+        .status-offline {
+            color: #F44336;
+        }
+
+        .status-unknown {
+            color: #FFC107;
+        }
+
+        .bot-info {
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <h1>Forum Bot Test Page</h1>
+    <p>This page demonstrates the Python-powered forum bot implementation. The bot can connect to Python servers running on ports 8043 (code bot) and 8044 (chat bot).</p>
+    
+    <div class="note">
+        <strong>Note:</strong> Make sure your Python servers are running before testing. Check server status in the bot footer.
+    </div>
+    
+    <div class="test-section">
+        <h2>Auto Mode Bot</h2>
+        <p>This bot will automatically route messages to the appropriate server based on the first character.</p>
+        <p>Messages starting with # will go to the code server (port 8043), all other messages will go to the chat server (port 8044).</p>
+        
+        <div class="forum-bot-container" data-id="bot-test-auto" data-name="Auto Bot" data-type="auto">
+            <div class="forum-bot-header">
+                <i class="fas fa-robot"></i> Auto Bot
+                <div class="bot-type-toggle">
+                    <label class="toggle-label">
+                        <input type="radio" name="bot-type-bot-test-auto" value="chat" data-bot-id="bot-test-auto">
+                        <span>Chat</span>
+                    </label>
+                    <label class="toggle-label">
+                        <input type="radio" name="bot-type-bot-test-auto" value="auto" checked data-bot-id="bot-test-auto">
+                        <span>Auto</span>
+                    </label>
+                    <label class="toggle-label">
+                        <input type="radio" name="bot-type-bot-test-auto" value="code" data-bot-id="bot-test-auto">
+                        <span>Code</span>
+                    </label>
+                </div>
+                <div class="bot-status" id="bot-test-auto-status"></div>
+            </div>
+            <div class="forum-bot-messages" id="bot-test-auto-messages">
+                <div class="bot-message">
+                    <div class="bot-avatar">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message-content">Hello! I am in Auto mode. I'll route your messages to the appropriate Python server based on content. Use # prefix for code questions.</div>
+                </div>
+            </div>
+            <div class="forum-bot-input">
+                <textarea id="bot-test-auto-input" placeholder="Type your message here... (Use # prefix for code-specific queries)"></textarea>
+                <button class="bot-send-btn" data-target="bot-test-auto">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+            <div class="forum-bot-footer">
+                <span class="bot-status-indicator"><i class="fas fa-circle"></i> <span id="bot-test-auto-connection">Initializing...</span></span>
+                <span class="bot-info">Powered by Python AI</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Chat Mode Bot</h2>
+        <p>This bot will always send messages to the chat server (port 8044), regardless of message content.</p>
+        
+        <div class="forum-bot-container" data-id="bot-test-chat" data-name="Chat Bot" data-type="chat">
+            <div class="forum-bot-header">
+                <i class="fas fa-robot"></i> Chat Bot
+                <div class="bot-type-toggle">
+                    <label class="toggle-label">
+                        <input type="radio" name="bot-type-bot-test-chat" value="chat" checked data-bot-id="bot-test-chat">
+                        <span>Chat</span>
+                    </label>
+                    <label class="toggle-label">
+                        <input type="radio" name="bot-type-bot-test-chat" value="auto" data-bot-id="bot-test-chat">
+                        <span>Auto</span>
+                    </label>
+                    <label class="toggle-label">
+                        <input type="radio" name="bot-type-bot-test-chat" value="code" data-bot-id="bot-test-chat">
+                        <span>Code</span>
+                    </label>
+                </div>
+                <div class="bot-status" id="bot-test-chat-status"></div>
+            </div>
+            <div class="forum-bot-messages" id="bot-test-chat-messages">
+                <div class="bot-message">
+                    <div class="bot-avatar">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message-content">Hello! I am in Chat mode. All messages will go to the chat server (port 8044).</div>
+                </div>
+            </div>
+            <div class="forum-bot-input">
+                <textarea id="bot-test-chat-input" placeholder="Type your message here..."></textarea>
+                <button class="bot-send-btn" data-target="bot-test-chat">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+            <div class="forum-bot-footer">
+                <span class="bot-status-indicator"><i class="fas fa-circle"></i> <span id="bot-test-chat-connection">Initializing...</span></span>
+                <span class="bot-info">Powered by Python AI</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Code Mode Bot</h2>
+        <p>This bot will always send messages to the code server (port 8043), regardless of message content.</p>
+        
+        <div class="forum-bot-container" data-id="bot-test-code" data-name="Code Bot" data-type="code">
+            <div class="forum-bot-header">
+                <i class="fas fa-robot"></i> Code Bot
+                <div class="bot-type-toggle">
+                    <label class="toggle-label">
+                        <input type="radio" name="bot-type-bot-test-code" value="chat" data-bot-id="bot-test-code">
+                        <span>Chat</span>
+                    </label>
+                    <label class="toggle-label">
+                        <input type="radio" name="bot-type-bot-test-code" value="auto" data-bot-id="bot-test-code">
+                        <span>Auto</span>
+                    </label>
+                    <label class="toggle-label">
+                        <input type="radio" name="bot-type-bot-test-code" value="code" checked data-bot-id="bot-test-code">
+                        <span>Code</span>
+                    </label>
+                </div>
+                <div class="bot-status" id="bot-test-code-status"></div>
+            </div>
+            <div class="forum-bot-messages" id="bot-test-code-messages">
+                <div class="bot-message">
+                    <div class="bot-avatar">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message-content">Hello! I am in Code mode. All messages will go to the code server (port 8043).</div>
+                </div>
+            </div>
+            <div class="forum-bot-input">
+                <textarea id="bot-test-code-input" placeholder="Type your message here..."></textarea>
+                <button class="bot-send-btn" data-target="bot-test-code">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+            <div class="forum-bot-footer">
+                <span class="bot-status-indicator"><i class="fas fa-circle"></i> <span id="bot-test-code-connection">Initializing...</span></span>
+                <span class="bot-info">Powered by Python AI</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>BBCode Examples</h2>
+        <p>Use the following BBCode syntax to add a bot to your forum posts:</p>
+        
+        <h3>Basic Bot</h3>
+        <div class="bbcode-example">[bot]Hello! I am a forum bot. You can interact with me.[/bot]</div>
+        
+        <h3>Named Bot</h3>
+        <div class="bbcode-example">[bot:name=Python Assistant]Hello! I am a Python assistant. Ask me anything about Python![/bot]</div>
+        
+        <h3>Specific Mode Bot</h3>
+        <div class="bbcode-example">[bot:name=Code Helper:type=code]Hello! I am a coding assistant. Ask me coding questions![/bot]</div>
+    </div>
+    
+    <script>
+        // Custom ForumBot implementation for the test page
+        const ForumBot = {
+            // Configuration
+            serverConfig: {
+                codeBot: {
+                    url: 'http://jcmc.serveminecraft.net:8044/talk',
+                    port: 8044,
+                    status: 'unknown' // 'online', 'offline', or 'unknown'
+                },
+                chatBot: {
+                    url: 'http://jcmc.serverminecraft.net:8043/talk',
+                    port: 8043,
+                    status: 'unknown'
+                },
+                timeout: 10000 // 10 seconds timeout for API calls
+            },
+            
+            // Initialize all bot instances on the page
+            init() {
+                console.log('Initializing Forum Bot with Python server integration...');
+                
+                // Find all bot containers
+                const botContainers = document.querySelectorAll('.forum-bot-container');
+                
+                // Check server status first
+                this.checkServerStatus()
+                    .then(() => {
+                        // Initialize each bot after checking server status
+                        botContainers.forEach(container => {
+                            this.initializeBot(container);
+                        });
+                        
+                        console.log('All bots initialized after server status check');
+                    })
+                    .catch(error => {
+                        console.error('Error during server status check:', error);
+                        // Initialize bots anyway, status will show as offline
+                        botContainers.forEach(container => {
+                            this.initializeBot(container);
+                        });
+                    });
+                
+                // Set up periodic server status checks
+                setInterval(() => this.checkServerStatus(), 60000); // Check every minute
+            },
+            
+            // Check if both Python servers are online
+            async checkServerStatus() {
+                console.log('Checking Python server status...');
+                
+                try {
+                    // Check code bot server (Port 8043)
+                    await this.checkServerConnection(this.serverConfig.codeBot);
+                    
+                    // Check chat bot server (Port 8044)
+                    await this.checkServerConnection(this.serverConfig.chatBot);
+                    
+                    // Update all bot status indicators
+                    document.querySelectorAll('.forum-bot-container').forEach(container => {
+                        this.updateBotStatusIndicator(container);
+                    });
+                    
+                    return true;
+                } catch (error) {
+                    console.error('Server status check failed:', error);
+                    return false;
+                }
+            },
+            
+            // Check connection to a specific server
+            async checkServerConnection(server) {
+                return new Promise((resolve, reject) => {
+                    // Use XHR to detect connection faster than fetch
+                    const xhr = new XMLHttpRequest();
+                    
+                    // Set timeout
+                    xhr.timeout = 3000;
+                    
+                    // Define handlers
+                    xhr.onload = function() {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            server.status = 'online';
+                            resolve(true);
+                        } else {
+                            server.status = 'offline';
+                            reject(new Error(`Server at port ${server.port} returned status ${xhr.status}`));
+                        }
+                    };
+                    
+                    xhr.onerror = function() {
+                        server.status = 'offline';
+                        reject(new Error(`Connection error to server at port ${server.port}`));
+                    };
+                    
+                    xhr.ontimeout = function() {
+                        server.status = 'offline';
+                        reject(new Error(`Connection timeout to server at port ${server.port}`));
+                    };
+                    
+                    // Prepare the request with a simple query parameter to minimize load
+                    xhr.open('GET', `${server.url}?ack=ping`, true);
+                    
+                    // Attempt connection
+                    try {
+                        xhr.send();
+                    } catch (error) {
+                        server.status = 'offline';
+                        reject(error);
+                    }
+                });
+            },
+            
+            // Initialize a single bot container
+            initializeBot(container) {
+                const botId = container.dataset.id;
+                const botName = container.dataset.name;
+                const botType = container.dataset.type || 'auto';
+                
+                // Skip if already initialized
+                if (container.dataset.initialized === 'true') {
+                    return;
+                }
+                
+                // Mark as initialized
+                container.dataset.initialized = 'true';
+                
+                // Get elements
+                const messagesContainer = document.getElementById(`${botId}-messages`);
+                const inputField = document.getElementById(`${botId}-input`);
+                const sendButton = container.querySelector('.bot-send-btn');
+                const statusElement = document.getElementById(`${botId}-connection`);
+                
+                // Update status indicator based on server status
+                this.updateBotStatusIndicator(container);
+                
+                // Add event listener for send button
+                sendButton.addEventListener('click', () => {
+                    this.sendMessage(botId, inputField.value);
+                    inputField.value = '';
+                });
+                
+                // Add event listener for enter key
+                inputField.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage(botId, inputField.value);
+                        inputField.value = '';
+                    }
+                });
+                
+                // Add event listeners for bot type toggle
+                container.querySelectorAll('input[name^="bot-type-"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        if (e.target.checked) {
+                            container.dataset.type = e.target.value;
+                            this.updateBotStatusIndicator(container);
+                            
+                            // Add a system message about bot type change
+                            this.addSystemMessage(messagesContainer, `Switched to ${e.target.value === 'auto' ? 'automatic' : e.target.value} mode`);
+                        }
+                    });
+                });
+                
+                console.log(`Bot "${botName}" (${botId}) initialized with type: ${botType}`);
+                
+                // Add initial system message
+                this.addSystemMessage(messagesContainer, `Connected in ${botType === 'auto' ? 'automatic' : botType} mode`);
+            },
+            
+            // Update bot status indicator based on server status
+            updateBotStatusIndicator(container) {
+                const botId = container.dataset.id;
+                const botType = container.dataset.type || 'auto';
+                const connectionElement = document.getElementById(`${botId}-connection`);
+                
+                if (!connectionElement) return;
+                
+                let statusIcon = connectionElement.previousElementSibling;
+                
+                // Determine status based on bot type and server status
+                let status = 'unknown';
+                let statusText = 'Unknown';
+                
+                if (botType === 'code' || botType === 'auto') {
+                    if (this.serverConfig.codeBot.status === 'offline') {
+                        status = 'offline';
+                        statusText = 'Code Server Offline';
+                    }
+                }
+                
+                if (botType === 'chat' || botType === 'auto') {
+                    if (this.serverConfig.chatBot.status === 'offline') {
+                        status = 'offline';
+                        statusText = 'Chat Server Offline';
+                    }
+                }
+                
+                // If both relevant servers are not offline, status is online
+                if (status !== 'offline') {
+                    status = 'online';
+                    statusText = `${botType === 'auto' ? 'Auto' : botType === 'code' ? 'Code' : 'Chat'} Mode`;
+                }
+                
+                // Update status text and icon color
+                connectionElement.textContent = statusText;
+                
+                if (statusIcon) {
+                    statusIcon.className = 'fas fa-circle';
+                    if (status === 'online') {
+                        statusIcon.classList.add('status-online');
+                    } else if (status === 'offline') {
+                        statusIcon.classList.add('status-offline');
+                    } else {
+                        statusIcon.classList.add('status-unknown');
+                    }
+                }
+            },
+            
+            // Send a message to the bot
+            async sendMessage(botId, message) {
+                if (!message.trim()) return;
+                
+                const container = document.querySelector(`.forum-bot-container[data-id="${botId}"]`);
+                if (!container) return;
+                
+                const botType = container.dataset.type || 'auto';
+                const messagesContainer = document.getElementById(`${botId}-messages`);
+                
+                // Add user message to chat
+                this.addMessage(messagesContainer, message, 'user');
+                
+                // Determine which server to use based on message and bot type
+                let server;
+                const isCodeQuery = message.trim().startsWith('#');
+                
+                if (botType === 'code' || (botType === 'auto' && isCodeQuery)) {
+                    server = this.serverConfig.codeBot;
+                } else {
+                    server = this.serverConfig.chatBot;
+                }
+                
+                // Check if server is offline
+                if (server.status === 'offline') {
+                    this.addSystemMessage(messagesContainer, 'Server is currently offline. Please try again later.');
+                    return;
+                }
+                
+                // Show thinking indicator
+                const thinkingId = this.addThinkingIndicator(messagesContainer);
+                
+                try {
+                    // Send message to Python server
+                    const response = await this.sendToPythonServer(server, message);
+                    
+                    // Remove thinking indicator
+                    this.removeThinkingIndicator(thinkingId);
+                    
+                    // Add bot response to chat
+                    if (response && response.response) {
+                        this.addMessage(messagesContainer, response.response, 'bot');
+                    } else {
+                        throw new Error('Invalid response from server');
+                    }
+                } catch (error) {
+                    console.error('Error sending message to Python server:', error);
+                    
+                    // Remove thinking indicator
+                    this.removeThinkingIndicator(thinkingId);
+                    
+                    // Add error message
+                    this.addSystemMessage(messagesContainer, 'Error connecting to server. Please try again later.');
+                    
+                    // Update server status
+                    server.status = 'offline';
+                    this.updateBotStatusIndicator(container);
+                }
+            },
+            
+            // Send message to Python server
+            async sendToPythonServer(server, message) {
+                try {
+                    // Encode message for URL
+                    const encodedMessage = encodeURIComponent(message);
+                    
+                    // Send request with timeout
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), this.serverConfig.timeout);
+                    
+                    const response = await fetch(`${server.url}?ack=${encodedMessage}`, {
+                        method: 'GET',
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Server responded with status: ${response.status}`);
+                    }
+                    
+                    // Parse JSON response
+                    const data = await response.json();
+                    return data;
+                    
+                } catch (error) {
+                    console.error('Error in sendToPythonServer:', error);
+                    throw error;
+                }
+            },
+            
+            // Add a message to the chat
+            addMessage(container, message, sender) {
+                const messageElement = document.createElement('div');
+                messageElement.className = sender === 'user' ? 'user-message' : 'bot-message';
+                
+                let content = '';
+                
+                if (sender === 'bot') {
+                    // Process code blocks in bot messages
+                    const processedMessage = this.processCodeBlocks(message);
+                    
+                    content = `
+                        <div class="bot-avatar">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="message-content">${processedMessage}</div>
+                    `;
+                } else {
+                    content = `
+                        <div class="message-content">${this.escapeHtml(message)}</div>
+                    `;
+                }
+                
+                messageElement.innerHTML = content;
+                container.appendChild(messageElement);
+                
+                // Scroll to bottom
+                container.scrollTop = container.scrollHeight;
+            },
+            
+            // Add a system message
+            addSystemMessage(container, message) {
+                const messageElement = document.createElement('div');
+                messageElement.className = 'system-message';
+                messageElement.textContent = message;
+                
+                container.appendChild(messageElement);
+                
+                // Scroll to bottom
+                container.scrollTop = container.scrollHeight;
+            },
+            
+            // Add thinking indicator
+            addThinkingIndicator(container) {
+                const id = 'thinking-' + Math.random().toString(36).substring(2, 9);
+                
+                const thinkingElement = document.createElement('div');
+                thinkingElement.className = 'bot-message thinking';
+                thinkingElement.id = id;
+                
+                thinkingElement.innerHTML = `
+                    <div class="bot-avatar">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message-content">
+                        <span class="thinking-dots">
+                            <span class="dot"></span>
+                            <span class="dot"></span>
+                            <span class="dot"></span>
+                        </span>
+                    </div>
+                `;
+                
+                container.appendChild(thinkingElement);
+                
+                // Scroll to bottom
+                container.scrollTop = container.scrollHeight;
+                
+                return id;
+            },
+            
+            // Remove thinking indicator
+            removeThinkingIndicator(id) {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.remove();
+                }
+            },
+            
+            // Process code blocks in messages
+            processCodeBlocks(message) {
+                // Simple pattern to look for code snippets (indented blocks, code between backticks, etc.)
+                const codePattern = /```(?:\w+)?\s*([\s\S]+?)```|`([^`]+)`|(?:^|\n)( {4}[\s\S]+?)(?=\n[^ ]|\n$|$)/g;
+                
+                // Replace code patterns with HTML
+                return message.replace(codePattern, (match, codeBlock1, codeBlock2, codeBlock3) => {
+                    // Determine which capture group has the code
+                    const code = codeBlock1 || codeBlock2 || codeBlock3 || '';
+                    
+                    if (codeBlock1) {
+                        // Multi-line code block (```code```)
+                        return `<pre class="code-block"><code>${this.escapeHtml(code)}</code></pre>`;
+                    } else if (codeBlock2) {
+                        // Inline code (`code`)
+                        return `<code class="inline-code">${this.escapeHtml(code)}</code>`;
+                    } else if (codeBlock3) {
+                        // Indented code block (4 spaces)
+                        return `<pre class="code-block"><code>${this.escapeHtml(code)}</code></pre>`;
+                    }
+                    
+                    return match; // Fallback
+                });
+            },
+            
+            // Escape HTML to prevent XSS
+            escapeHtml(text) {
+                return text
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+        };
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            ForumBot.init();
+        });
+    </script>
+</body>
+</html>

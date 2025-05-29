@@ -1,0 +1,202 @@
+/* viewport-scaling.css - Add this as a new file or include at the bottom of your styles.css */
+
+/* =============================================
+   VIEWPORT SCALING SYSTEM
+   ============================================= */
+
+/* Base viewport setup */
+:root {
+  /* Base scaling variables */
+  --viewport-scale: 1;
+  --min-width: 1200px; /* Your design's ideal desktop width */
+  --content-scale: calc(100vw / var(--min-width));
+  
+  /* Fluid font size variables */
+  --base-font-size: 16px;
+  --fluid-font-size: calc(var(--base-font-size) * var(--content-scale));
+  --clamped-font-size: clamp(12px, var(--fluid-font-size), 20px);
+  
+  /* Spacing variables */
+  --spacing-unit: 8px;
+  --fluid-spacing: calc(var(--spacing-unit) * var(--content-scale));
+}
+
+/* Apply consistent scaling by overriding responsive breakpoint behaviors */
+@media (max-width: 1200px) {
+  /* Remove all mobile navigation changes */
+  .mobile-menu-toggle {
+    display: none !important; /* Keep desktop menu visible */
+  }
+  
+  nav {
+    position: relative !important;
+    right: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    background-color: transparent !important;
+    flex-direction: row !important;
+    padding: 0 !important;
+  }
+  
+  .nav-link {
+    width: auto !important;
+    padding: calc(0.5rem * var(--content-scale)) calc(1rem * var(--content-scale)) !important;
+    border-bottom: none !important;
+  }
+  
+  /* Apply scaling to the entire body */
+  body {
+    min-width: var(--min-width);
+    width: 100%;
+    overflow-x: hidden;
+    transform-origin: top left;
+    transform: scale(var(--content-scale));
+    height: auto;
+  }
+  
+  /* Ensure the body takes up the correct space after scaling */
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* Fix height issues with scaling */
+  html {
+    min-height: calc(100% / var(--content-scale));
+  }
+  
+  /* Maintain fixed positioning for modals and overlays */
+  .modal, .toast-container {
+    transform: scale(calc(1 / var(--content-scale)));
+    transform-origin: bottom right;
+  }
+  
+  /* Remove all responsive layout changes */
+  .hero-buttons,
+  .post-with-placard,
+  .reply-with-placard,
+  .profile-header,
+  .forum-header {
+    flex-direction: row !important;
+  }
+  
+  .profile-details,
+  .profile-activity {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+  }
+  
+  /* Override content padding */
+  .content {
+    padding: calc(2rem * var(--content-scale)) !important;
+  }
+  
+  /* Override box sizing for scaled content */
+  * {
+    max-width: none !important;
+  }
+  
+  /* Maintain avatar sizes */
+  .profile-avatar, 
+  .twitter-card-avatar {
+    width: auto !important;
+    height: auto !important;
+  }
+  
+  /* Override card and container positioning */
+  .post-placard,
+  .reply-placard {
+    flex: 0 0 200px !important;
+    width: auto !important;
+    margin-bottom: 0 !important;
+  }
+  
+  /* Override button styling */
+  .category-card-header .delete-category,
+  .post-card-header .delete-post,
+  .reply-meta .delete-reply,
+  #delete-post-btn {
+    margin-left: initial !important;
+    margin-top: initial !important;
+    width: auto !important;
+    text-align: initial !important;
+  }
+}
+
+/* JavaScript to update scaling based on viewport size */
+document.addEventListener('DOMContentLoaded', function() {
+  // Create and append the script to handle viewport scaling
+  const script = document.createElement('script');
+  script.textContent = `
+    function updateViewportScale() {
+      const viewportWidth = window.innerWidth;
+      const minWidth = 1200; // Should match --min-width in CSS
+      
+      if (viewportWidth < minWidth) {
+        const scale = viewportWidth / minWidth;
+        document.documentElement.style.setProperty('--content-scale', scale);
+        
+        // Adjust body height to account for scaling
+        const body = document.body;
+        const height = body.scrollHeight;
+        document.documentElement.style.height = (height * scale) + 'px';
+      } else {
+        document.documentElement.style.setProperty('--content-scale', '1');
+        document.documentElement.style.height = 'auto';
+      }
+    }
+    
+    // Update scale on load and resize
+    window.addEventListener('load', updateViewportScale);
+    window.addEventListener('resize', updateViewportScale);
+    
+    // Initial call
+    updateViewportScale();
+  `;
+  document.head.appendChild(script);
+
+  // Create meta viewport tag if it doesn't exist
+  if (!document.querySelector('meta[name="viewport"]')) {
+    const meta = document.createElement('meta');
+    meta.name = 'viewport';
+    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    document.head.appendChild(meta);
+  }
+});
+
+/* Fix for iOS and mobile browsers */
+@media screen and (max-width: 1200px) and (orientation: portrait) {
+  body {
+    width: 1200px !important; /* Force minimum width */
+    overflow-x: auto;
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+  
+  /* Fix height for mobile portrait */
+  html {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
+
+/* Optional: Custom Scrollbar for Scaled View */
+@media (max-width: 1200px) {
+  ::-webkit-scrollbar {
+    width: calc(12px * var(--content-scale));
+    height: calc(12px * var(--content-scale));
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: calc(6px * var(--content-scale));
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #555;
+  }
+}
