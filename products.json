@@ -59,5 +59,21 @@
         "owner_username": "admin",
         "owner_id": "391be23105c66930cf4a2813b87f177b",
         "owner_email": "admin@admin.com"
+    },
+    {
+        "id": "prod_0eb7432ed1437b6b",
+        "name": "PFSForum",
+        "description": "Perfect forward secrecy.",
+        "price": 9.99,
+        "file_name": "pfsforum.zip",
+        "file_path": "uploads\/products\/prod_0eb7432ed1437b6b.zip",
+        "file_size": 29586150,
+        "seller_id": "f50bb5159975742dc1036ac6b7d237b8",
+        "seller_email": "Admin@Admin.com",
+        "seller_username": "Admin",
+        "created_at": "2025-05-30 03:45:07",
+        "owner_username": "Admin",
+        "owner_id": "f50bb5159975742dc1036ac6b7d237b8",
+        "owner_email": "Admin@Admin.com"
     }
 ]

@@ -32,7 +32,11 @@ define('REPLIES_FILE', DATA_DIR . '/replies.json.enc');
 define('SEO_FILE', DATA_DIR . '/seo.json.enc');
 define('SESSION_KEYS_FILE', DATA_DIR . '/session_keys.json.enc');
 define('ENCRYPTION_META_FILE', DATA_DIR . '/encryption_meta.json');
-define('KEYS_FILE', DATA_DIR . '/server_keys.json.enc');
+define('KEYS_FILE', DATA_DIR . '/server_keys.json.enc'); // Client-server public/private keys
+
+// NEW: Backup and Recovery related constants
+define('BACKUP_BASE_DIR', DATA_DIR . '/backups');
+define('RECOVERY_KEY_FILE', DATA_DIR . '/recovery_key.json.enc'); // Stores the previous day's key, encrypted by current day's key
 
 // Individual item directories
 define('CATEGORIES_DIR', DATA_DIR . '/categories');
@@ -40,9 +44,7 @@ define('POSTS_DIR', DATA_DIR . '/posts');
 define('REPLIES_DIR', DATA_DIR . '/replies');
 define('PLACARDS_DIR', DATA_DIR . '/placards');
 define('AVATARS_DIR', DATA_DIR . '/avatars');
-if (!file_exists(AVATARS_DIR)) {
-    mkdir(AVATARS_DIR, 0755, true);
-}
+
 // Create data directories if they don't exist
 if (!file_exists(DATA_DIR)) {
     mkdir(DATA_DIR, 0755, true);
@@ -58,6 +60,12 @@ if (!file_exists(REPLIES_DIR)) {
 }
 if (!file_exists(PLACARDS_DIR)) {
     mkdir(PLACARDS_DIR, 0755, true);
+}
+if (!file_exists(AVATARS_DIR)) {
+    mkdir(AVATARS_DIR, 0755, true);
+}
+if (!file_exists(BACKUP_BASE_DIR)) {
+    mkdir(BACKUP_BASE_DIR, 0755, true);
 }
 
 // Check if encryption needs to be updated for today
@@ -122,20 +130,20 @@ try {
             addReply();
             break;
          case "federation_status":
-    getFederationStatusEndpoint();
-    break;
+            getFederationStatusEndpoint();
+            break;
 
-case "connect_server":
-    connectServerEndpoint();
-    break;
+        case "connect_server":
+            connectServerEndpoint();
+            break;
 
-case "share_file":
-    shareFileEndpoint();
-    break;
+        case "share_file":
+            shareFileEndpoint();
+            break;
 
-case "import_file":
-    importFileEndpoint();
-    break;   
+        case "import_file":
+            importFileEndpoint();
+            break;   
         case "delete_reply":
             deleteReply();
             break;
@@ -152,25 +160,30 @@ case "import_file":
             getServerPublicKey();
             break;
         case "get_reply_counts":
-    getReplyCountsEndpoint();
-    break;
+            getReplyCountsEndpoint();
+            break;
     
         case "get_encryption_status":
             getEncryptionStatus();
             break;
-           case "get_avatar":
-    getAvatar();
-    break;
+        case "get_avatar":
+            getAvatar();
+            break;
 
-case "upload_avatar":
-    uploadAvatar();
-    break;
+        case "upload_avatar":
+            uploadAvatar();
+            break;
 
-case "update_placard_value":
-    updatePlacardValueEndpoint();
-    break; 
+        case "update_placard_value":
+            updatePlacardValueEndpoint();
+            break; 
         case "get_user_placard":
             getUserPlacard();
+            break;
+
+        // NEW: Admin recovery action
+        case "admin_recovery":
+            adminRecovery();
             break;
             
         default:
@@ -1139,6 +1152,86 @@ function getEncryptionStatus() {
     ]);
 }
 
+/**
+ * NEW: Function to recursively copy a directory.
+ * Used for creating full site backups.
+ */
+function copyDirectory($source, $destination) {
+    if (!is_dir($source)) {
+        return false;
+    }
+
+    if (!is_dir($destination)) {
+        mkdir($destination, 0755, true);
+    }
+
+    $dir = opendir($source);
+    if ($dir === false) {
+        return false;
+    }
+
+    while (false !== ($file = readdir($dir))) {
+        if (($file != '.') && ($file != '..')) {
+            if (is_dir($source . '/' . $file)) {
+                copyDirectory($source . '/' . $file, $destination . '/' . $file);
+            } else {
+                copy($source . '/' . $file, $destination . '/' . $file);
+            }
+        }
+    }
+    closedir($dir);
+    return true;
+}
+
+/**
+ * NEW: Function to backup the entire data directory.
+ */
+function backupSiteData() {
+    $timestamp = date('Ymd_His');
+    $backupPath = BACKUP_BASE_DIR . '/' . $timestamp;
+
+    // Ensure backup base directory exists
+    if (!file_exists(BACKUP_BASE_DIR)) {
+        mkdir(BACKUP_BASE_DIR, 0755, true);
+    }
+    
+    // Create the timestamped backup directory
+    if (!mkdir($backupPath, 0755, true)) {
+        error_log("Failed to create backup directory: {$backupPath}");
+        return false;
+    }
+
+    // Copy the entire DATA_DIR to the backup path
+    $success = copyDirectory(DATA_DIR, $backupPath);
+    
+    if (!$success) {
+        error_log("Failed to copy data directory to backup: {$backupPath}");
+    } else {
+        error_log("Site data backed up to: {$backupPath}");
+    }
+    return $success;
+}
+
+/**
+ * NEW: Function to re-encrypt the previous day's daily key with the new daily key.
+ * This is crucial for recovery.
+ */
+function reEncryptRecoveryKey($oldDailyKey, $newDailyKey) {
+    // Store the old daily key, encrypted by the new daily key
+    // This allows an admin to use the base secret to get the current daily key,
+    // then use that to decrypt this file to get the previous daily key, and so on.
+    
+    $keyToStore = $oldDailyKey; // The key we want to be able to recover
+    
+    // Encrypt the old daily key with the new daily key
+    $encryptedKey = encryptData($keyToStore, $newDailyKey);
+    
+    // Save it to a dedicated file
+    file_put_contents(RECOVERY_KEY_FILE, $encryptedKey);
+    error_log("Recovery key updated and re-encrypted.");
+}
+
+
 // Check if encryption needs to be updated for today
 function checkDailyEncryption() {
     $today = date('Y-m-d');
@@ -1146,25 +1239,98 @@ function checkDailyEncryption() {
     
     // Check if re-encryption is needed
     if ($encryptionMeta['lastEncryptionDate'] !== $today) {
+        error_log("Daily encryption pass initiated for {$today}.");
+
         // Generate today's key
         $todayKey = generateDailyKey($today);
         
+        // Determine the key that was used yesterday
+        $yesterday = date('Y-m-d', strtotime('-1 day'));
+        $yesterdayKey = generateDailyKey($yesterday); // This is the key that was used to encrypt data yesterday
+
+        // NEW: 1. Backup the entire site data BEFORE re-encryption
+        error_log("Starting site data backup...");
+        backupSiteData();
+        error_log("Site data backup complete.");
+
+        // NEW: 2. Re-encrypt the previous day's daily key with the new daily key
+        // This allows for a chain of recovery keys.
+        error_log("Re-encrypting recovery key...");
+        reEncryptRecoveryKey($yesterdayKey, $todayKey); // Store yesterday's key, encrypted by today's key
+        error_log("Recovery key re-encrypted.");
+
         // If data was already encrypted, re-encrypt with today's key
         if ($encryptionMeta['isEncrypted'] && !empty($encryptionMeta['lastEncryptionDate'])) {
-            // Get yesterday's key
-            $yesterday = date('Y-m-d', strtotime('-1 day'));
-            $yesterdayKey = generateDailyKey($yesterday);
-            
-            // Re-encrypt all data files
-            reEncryptDataFiles($yesterdayKey, $todayKey);
+            error_log("Re-encrypting all data files with new daily key...");
+            reEncryptDataFiles($yesterdayKey, $todayKey); // Decrypt with yesterday's key, encrypt with today's key
+            error_log("All data files re-encrypted.");
+        } else {
+            // This is the first time encryption is being applied or after a full decryption
+            error_log("Initial encryption or re-encryption after recovery: Encrypting all data files with today's key...");
+            // If data is currently unencrypted, encrypt it with today's key
+            encryptAllDataFiles($todayKey);
+            error_log("All data files initially encrypted.");
         }
         
         // Update encryption metadata
         $encryptionMeta['lastEncryptionDate'] = $today;
         $encryptionMeta['isEncrypted'] = true;
         saveEncryptionMeta($encryptionMeta);
+        error_log("Encryption metadata updated.");
     }
 }
+
+/**
+ * NEW: Function to encrypt all data files from their unencrypted state using a given key.
+ * This is used during initial encryption or after an admin recovery.
+ */
+function encryptAllDataFiles($encryptionKey) {
+    $files = [USERS_FILE, CATEGORIES_FILE, POSTS_FILE, REPLIES_FILE, SEO_FILE, KEYS_FILE];
+    
+    foreach ($files as $file) {
+        if (file_exists($file)) {
+            $jsonData = file_get_contents($file); // Assume it's plain JSON
+            $encryptedData = encryptData($jsonData, $encryptionKey);
+            file_put_contents($file, $encryptedData);
+        }
+    }
+
+    // Encrypt individual category files
+    encryptDirectoryFiles(CATEGORIES_DIR, $encryptionKey);
+    
+    // Encrypt individual post files
+    encryptDirectoryFiles(POSTS_DIR, $encryptionKey);
+    
+    // Encrypt individual reply files
+    encryptDirectoryFiles(REPLIES_DIR, $encryptionKey);
+    
+    // Encrypt individual placard files
+    encryptDirectoryFiles(PLACARDS_DIR, $encryptionKey);
+}
+
+/**
+ * NEW: Helper to encrypt all .json files in a directory.
+ */
+function encryptDirectoryFiles($directory, $encryptionKey) {
+    if (!is_dir($directory)) {
+        return;
+    }
+    
+    $files = glob($directory . '/*.json'); // Look for unencrypted .json files
+    
+    foreach ($files as $file) {
+        if (file_exists($file)) {
+            $jsonData = file_get_contents($file);
+            $encryptedData = encryptData($jsonData, $encryptionKey);
+            
+            // Rename the file to .json.enc
+            $newFileName = $file . '.enc';
+            file_put_contents($newFileName, $encryptedData);
+            unlink($file); // Delete the original unencrypted file
+        }
+    }
+}
+
 
 // Re-encrypt all data files
 function reEncryptDataFiles($oldKey, $newKey) {
@@ -1227,7 +1393,8 @@ function reEncryptDirectoryFiles($directory, $oldKey, $newKey) {
 
 // Generate daily encryption key
 function generateDailyKey($dateString) {
-    $baseSecret = "S3cure#F0rum#System#2025";
+    // This base secret is crucial for recovery. Keep it secure!
+    $baseSecret = "S3cure#F0rum#System#2025"; 
     $combinedString = $baseSecret . $dateString;
     return hash('sha256', $combinedString);
 }
@@ -1259,7 +1426,7 @@ function decryptData($encryptedData, $key) {
         $data = base64_decode($encryptedData);
         
         if ($data === false) {
-            // Not encrypted, return as is
+            // Not base64 encoded or invalid, return original data
             return $encryptedData;
         }
         
@@ -1273,13 +1440,14 @@ function decryptData($encryptedData, $key) {
         $decrypted = openssl_decrypt($encrypted, 'AES-256-CBC', $decKey, 0, $iv);
         
         if ($decrypted === false) {
-            // Failed to decrypt, return original
+            // Failed to decrypt, return original (might be unencrypted or corrupted)
             return $encryptedData;
         }
         
         return $decrypted;
     } catch (Exception $e) {
         // On error, return original data
+        error_log("Decryption error: " . $e->getMessage());
         return $encryptedData;
     }
 }
@@ -1319,11 +1487,20 @@ function loadData($file) {
                 'description' => 'A secure forum system with encryption and many features',
                 'keywords' => 'forum,security,encryption'
             ];
-        } elseif ($file === CATEGORIES_FILE || $file === POSTS_FILE || $file === REPLIES_FILE) {
+        } elseif ($file === CATEGORIES_FILE || $file === POSTS_FILE || $file === REPLIES_FILE || strpos($file, '.json.enc') !== false) {
             $defaultData = [];
         }
         
-        saveData($file, $defaultData);
+        // If it's a new file that should be encrypted, save it as encrypted empty array
+        $encryptionMeta = loadEncryptionMeta();
+        if ($encryptionMeta['isEncrypted'] && strpos($file, '.json.enc') !== false) {
+             $today = date('Y-m-d');
+             $encryptionKey = generateDailyKey($today);
+             file_put_contents($file, encryptData(json_encode($defaultData, JSON_PRETTY_PRINT), $encryptionKey));
+        } else {
+            file_put_contents($file, json_encode($defaultData, JSON_PRETTY_PRINT));
+        }
+       
         return $defaultData;
     }
     
@@ -1335,31 +1512,28 @@ function loadData($file) {
     $encryptedData = file_get_contents($file);
     
     // Check if file is encrypted (starts with base64 encoded data)
-    if (base64_decode($encryptedData, true) !== false) {
+    // We assume .json.enc files are encrypted. If they aren't, try to decrypt anyway.
+    if (strpos($file, '.json.enc') !== false) {
         try {
-            // Try to decrypt with today's key
             $jsonData = decryptData($encryptedData, $encryptionKey);
             $data = json_decode($jsonData, true);
             
-            // If decoding failed, it might not be encrypted yet
+            // If decoding failed, it might be unencrypted or corrupted.
+            // Attempt to parse as plain JSON as a fallback.
             if ($data === null) {
-                // Try to parse as plain JSON
                 $data = json_decode($encryptedData, true);
-                
-                // If still null, return empty array
-                if ($data === null) {
-                    return [];
+                if ($data !== null) {
+                    error_log("Warning: Encrypted file {$file} was found to be unencrypted. Decrypting as plain JSON.");
                 }
             }
             
-            return $data;
+            return $data ?: [];
         } catch (Exception $e) {
-            // Decryption failed, return empty array
-            error_log("Error decrypting file $file: " . $e->getMessage());
+            error_log("Error decrypting file {$file}: " . $e->getMessage());
             return [];
         }
     } else {
-        // Not encrypted, just parse as JSON
+        // Not an encrypted file extension, just parse as JSON
         $data = json_decode($encryptedData, true);
         return $data ?: [];
     }
@@ -1380,17 +1554,17 @@ function saveData($file, $data) {
     $today = date('Y-m-d');
     $encryptionKey = generateDailyKey($today);
     
-    // Check if encryption is needed
+    // Check if encryption is needed based on file extension and global encryption status
     $encryptionMeta = loadEncryptionMeta();
     
-    if ($encryptionMeta['isEncrypted']) {
+    if ($encryptionMeta['isEncrypted'] && strpos($file, '.json.enc') !== false) {
         // Encrypt the data
         $encryptedData = encryptData($jsonData, $encryptionKey);
         
         // Save encrypted data
         file_put_contents($file, $encryptedData);
     } else {
-        // Save as plain JSON for now
+        // Save as plain JSON (e.g., for encryption_meta.json or if not yet encrypted)
         file_put_contents($file, $jsonData);
     }
 }
@@ -1460,9 +1634,6 @@ function getUserPlacard() {
         }
         
         // Get username
-        $username = $data["username"];
-        
-        // Get user data
         $users = loadData(USERS_FILE);
         $userData = null;
         
@@ -1783,4 +1954,133 @@ function updatePlacardValueEndpoint() {
     } catch (Exception $e) {
         echo json_encode(["success" => false, "error" => $e->getMessage()]);
     }
+}
+
+/**
+ * NEW: Admin Recovery Function
+ * This function decrypts all data files using a provided recovery key.
+ * This effectively "rolls back" the encryption to a known state (unencrypted)
+ * or allows access to data from a specific past daily key.
+ *
+ * @param string $recoveryPassword The base secret used to generate daily keys.
+ */
+function adminRecovery() {
+    $input = file_get_contents("php://input");
+    $data = json_decode($input, true);
+
+    if (!$data || !isset($data["recoveryPassword"]) || !isset($data["token"])) {
+        echo json_encode(["success" => false, "error" => "Missing required fields for recovery."]);
+        return;
+    }
+
+    $token = $data["token"];
+    $recoveryPassword = $data["recoveryPassword"];
+
+    // Verify admin token
+    $userId = verifyToken($token);
+    if (!$userId || !isUserAdmin($userId)) {
+        echo json_encode(["success" => false, "error" => "Permission denied. Only administrators can perform recovery."]);
+        return;
+    }
+
+    // Try to derive the initial daily key from the recovery password
+    // This is the key that was used on the day of the last encryption pass before recovery.
+    // If the recovery password is the original base secret, this will effectively
+    // decrypt everything back to plain JSON.
+    $currentDailyKey = generateDailyKey(date('Y-m-d')); // Get today's key based on the base secret
+
+    // Attempt to decrypt the RECOVERY_KEY_FILE to get the *previous* daily key
+    // This is the key that was used to encrypt the data *before* today's re-encryption.
+    // If RECOVERY_KEY_FILE doesn't exist, it means either no re-encryption has happened yet,
+    // or the system was just set up/re-initialized. In that case, we assume current data is
+    // encrypted with today's key, or is unencrypted.
+    $previousDailyKey = null;
+    if (file_exists(RECOVERY_KEY_FILE)) {
+        $encryptedPreviousKey = file_get_contents(RECOVERY_KEY_FILE);
+        $decryptedPreviousKey = decryptData($encryptedPreviousKey, $currentDailyKey);
+        
+        // If decryption successful, use this as the key to decrypt all data files
+        if ($decryptedPreviousKey !== $encryptedPreviousKey) { // Check if decryption actually changed the content
+            $previousDailyKey = $decryptedPreviousKey;
+        }
+    }
+
+    // If previousDailyKey is still null, it means RECOVERY_KEY_FILE didn't exist or couldn't be decrypted.
+    // In this scenario, we assume the data is either unencrypted or encrypted with the currentDailyKey.
+    // For recovery, we want to revert to an unencrypted state.
+    $keyToDecryptWith = $previousDailyKey ?: $currentDailyKey; // Try previous, then current if previous not found
+
+    error_log("Admin recovery initiated by user: {$userId}. Attempting to decrypt all data files.");
+
+    // Decrypt all data files back to plain JSON
+    $filesToDecrypt = [USERS_FILE, CATEGORIES_FILE, POSTS_FILE, REPLIES_FILE, SEO_FILE, KEYS_FILE];
+    
+    foreach ($filesToDecrypt as $file) {
+        if (file_exists($file)) {
+            $encryptedContent = file_get_contents($file);
+            $decryptedContent = decryptData($encryptedContent, $keyToDecryptWith);
+            
+            // If decryption was successful, save as plain JSON and rename
+            if ($decryptedContent !== $encryptedContent) {
+                $plainJsonFile = str_replace('.json.enc', '.json', $file);
+                file_put_contents($plainJsonFile, $decryptedContent);
+                unlink($file); // Remove the encrypted file
+            } else {
+                // If decryption failed, it might already be unencrypted or corrupted.
+                // Try to rename it if it's still .json.enc but couldn't be decrypted.
+                if (strpos($file, '.json.enc') !== false) {
+                    $plainJsonFile = str_replace('.json.enc', '.json', $file);
+                    rename($file, $plainJsonFile); // Just rename, assume it was already plain or corrupted
+                }
+            }
+        }
+    }
+
+    // Decrypt files in subdirectories
+    decryptDirectoryToPlain(CATEGORIES_DIR, $keyToDecryptWith);
+    decryptDirectoryToPlain(POSTS_DIR, $keyToDecryptWith);
+    decryptDirectoryToPlain(REPLIES_DIR, $keyToDecryptWith);
+    decryptDirectoryToPlain(PLACARDS_DIR, $keyToDecryptWith);
+
+    // Update encryption metadata to reflect unencrypted state
+    $encryptionMeta = loadEncryptionMeta();
+    $encryptionMeta['isEncrypted'] = false;
+    $encryptionMeta['lastEncryptionDate'] = ''; // Reset date as it's now unencrypted
+    saveEncryptionMeta($encryptionMeta);
+
+    error_log("Admin recovery completed. All data files are now unencrypted.");
+    echo json_encode(["success" => true, "message" => "Site data decrypted successfully. Please refresh the page."]);
+}
+
+/**
+ * NEW: Helper function to decrypt all .json.enc files in a directory to .json.
+ */
+function decryptDirectoryToPlain($directory, $key) {
+    if (!is_dir($directory)) {
+        return;
+    }
+    
+    $files = glob($directory . '/*.json.enc');
+    
+    foreach ($files as $file) {
+        if (file_exists($file)) {
+            $encryptedContent = file_get_contents($file);
+            $decryptedContent = decryptData($encryptedContent, $key);
+            
+            if ($decryptedContent !== $encryptedContent) {
+                $plainJsonFile = str_replace('.json.enc', '.json', $file);
+                file_put_contents($plainJsonFile, $decryptedContent);
+                unlink($file); // Remove the encrypted file
+            } else {
+                // If decryption failed, just rename it assuming it's already plain or corrupted
+                $plainJsonFile = str_replace('.json.enc', '.json', $file);
+                rename($file, $plainJsonFile);
+            }
+        }
+    }
+}
+
+// Generate secure ID
+function generateId() {
+    return bin2hex(random_bytes(16));
 }

@@ -26,3 +26,10 @@
 [2025-05-18 06:22:42] File moved to: uploads/products/prod_e5b599a0d4995d21.zip
 [2025-05-18 06:22:42] Product saved with owner: admin
 [2025-05-18 06:22:42] Upload completed successfully
+[2025-05-30 03:45:07] Request received: {"productName":"PFSForum","productDescription":"Perfect forward secrecy.","productPrice":"9.99","username":"Admin","email":"Admin@Admin.com","user_id":"f50bb5159975742dc1036ac6b7d237b8","token":"eyJ1c2VySWQiOiJmNTBiYjUxNTk5NzU3NDJkYzEwMzZhYzZiN2QyMzdiOCIsImV4cCI6MTc0OTE3MzgxNiwiaWF0IjoxNzQ4NTY5MDE2fQ=="}
+[2025-05-30 03:45:07] Files: {"productFile":{"name":"pfsforum.zip","type":"application\/x-zip-compressed","tmp_name":"C:\\portablexampp\\tmp\\phpC0E0.tmp","error":0,"size":29586150}}
+[2025-05-30 03:45:07] Using user: {"id":"f50bb5159975742dc1036ac6b7d237b8","username":"Admin","email":"Admin@Admin.com"}
+[2025-05-30 03:45:07] Generated product ID: prod_0eb7432ed1437b6b
+[2025-05-30 03:45:07] File moved to: uploads/products/prod_0eb7432ed1437b6b.zip
+[2025-05-30 03:45:07] Product saved with owner: Admin
+[2025-05-30 03:45:07] Upload completed successfully

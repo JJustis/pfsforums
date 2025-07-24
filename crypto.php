@@ -1,7 +1,7 @@
 
 <?php
 // Enable error reporting for debugging (remove in production)
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 // Set content type to JSON

@@ -1,0 +1,179 @@
+<?php
+// suggestions.php - Obfuscated suggestion system
+
+define('SUGGESTION_INDEX_FILE', DATA_DIR . '/suggestions/index.json.enc');
+define('USER_ACTIVITY_FILE', DATA_DIR . '/suggestions/user_activity.json.enc');
+define('FEDERATION_SUGGESTIONS_DIR', DATA_DIR . '/suggestions/federation');
+
+// Create directories
+if (!file_exists(DATA_DIR . '/suggestions')) {
+    mkdir(DATA_DIR . '/suggestions', 0755, true);
+}
+if (!file_exists(FEDERATION_SUGGESTIONS_DIR)) {
+    mkdir(FEDERATION_SUGGESTIONS_DIR, 0755, true);
+}
+
+/**
+ * Track user activity for suggestion engine
+ */
+function trackUserActivity($userId, $content, $type = 'view') {
+    if (!$userId) return;
+    
+    $activities = loadData(USER_ACTIVITY_FILE);
+    
+    if (!isset($activities[$userId])) {
+        $activities[$userId] = [
+            'word_exposure' => [],
+            'last_updated' => time(),
+            'suggestions_shown' => 0
+        ];
+    }
+    
+    // Extract and count words
+    $words = extractKeywords($content);
+    foreach ($words as $word) {
+        if (!isset($activities[$userId]['word_exposure'][$word])) {
+            $activities[$userId]['word_exposure'][$word] = 0;
+        }
+        
+        $activities[$userId]['word_exposure'][$word]++;
+    }
+    
+    $activities[$userId]['last_updated'] = time();
+    
+    // Limit word exposure size for performance
+    if (count($activities[$userId]['word_exposure']) > 500) {
+        arsort($activities[$userId]['word_exposure']);
+        $activities[$userId]['word_exposure'] = array_slice($activities[$userId]['word_exposure'], 0, 500, true);
+    }
+    
+    saveData(USER_ACTIVITY_FILE, $activities);
+}
+
+/**
+ * Extract keywords from content
+ */
+function extractKeywords($content) {
+    // Remove HTML
+    $text = strip_tags($content);
+    
+    // Convert to lowercase
+    $text = strtolower($text);
+    
+    // Remove special characters and split into words
+    $words = preg_split('/[^\w]+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
+    
+    // Filter out common stop words
+    $stopWords = ['the', 'and', 'or', 'a', 'an', 'in', 'of', 'to', 'for', 'on', 'with', 'by', 'as', 'at', 'that', 'this'];
+    $words = array_diff($words, $stopWords);
+    
+    // Filter to words with at least 3 characters
+    $words = array_filter($words, function($word) {
+        return strlen($word) >= 3;
+    });
+    
+    return $words;
+}
+
+/**
+ * Get thread suggestions for a user
+ */
+function getSuggestions($userId, $limit = 3) {
+    $activities = loadData(USER_ACTIVITY_FILE);
+    
+    if (!isset($activities[$userId]) || empty($activities[$userId]['word_exposure'])) {
+        return ['success' => true, 'suggestions' => []];
+    }
+    
+    // Get top keywords for user
+    $userKeywords = $activities[$userId]['word_exposure'];
+    arsort($userKeywords);
+    $topKeywords = array_slice($userKeywords, 0, 10, true);
+    
+    // Load suggestion index
+    $index = loadData(SUGGESTION_INDEX_FILE);
+    
+    // Score posts against keywords
+    $scores = [];
+    foreach ($index as $postId => $postData) {
+        $score = 0;
+        foreach ($topKeywords as $keyword => $userFrequency) {
+            if (isset($postData['keywords'][$keyword])) {
+                $score += $postData['keywords'][$keyword] * $userFrequency;
+            }
+        }
+        
+        if ($score > 0) {
+            $scores[$postId] = [
+                'score' => $score,
+                'data' => $postData
+            ];
+        }
+    }
+    
+    // Sort by score
+    arsort($scores);
+    
+    // Prepare suggestions
+    $suggestions = [];
+    $count = 0;
+    foreach ($scores as $postId => $scoreData) {
+        if ($count >= $limit) break;
+        
+        // Skip if user already viewed this
+        if (isset($scoreData['data']['viewed_by']) && in_array($userId, $scoreData['data']['viewed_by'])) {
+            continue;
+        }
+        
+        $suggestions[] = [
+            'id' => $postId,
+            'title' => $scoreData['data']['title'],
+            'snippet' => $scoreData['data']['snippet'],
+            'source' => $scoreData['data']['source']
+        ];
+        
+        $count++;
+    }
+    
+    // Track suggestion display
+    if (isset($activities[$userId])) {
+        $activities[$userId]['suggestions_shown']++;
+        saveData(USER_ACTIVITY_FILE, $activities);
+    }
+    
+    return [
+        'success' => true,
+        'suggestions' => $suggestions
+    ];
+}
+
+/**
+ * Index a post or article for suggestions
+ */
+function indexContentForSuggestions($content, $metadata) {
+    $index = loadData(SUGGESTION_INDEX_FILE);
+    
+    $id = $metadata['id'];
+    $keywords = extractKeywords($content);
+    
+    // Count keyword frequencies
+    $keywordFreq = array_count_values($keywords);
+    
+    // Create snippet
+    $text = strip_tags($content);
+    $snippet = substr($text, 0, 150) . (strlen($text) > 150 ? '...' : '');
+    
+    // Add to index
+    $index[$id] = [
+        'title' => $metadata['title'],
+        'keywords' => $keywordFreq,
+        'snippet' => $snippet,
+        'source' => $metadata['source'] ?? 'local',
+        'server_id' => $metadata['server_id'] ?? getLocalServerId(),
+        'indexed_at' => time(),
+        'viewed_by' => []
+    ];
+    
+    saveData(SUGGESTION_INDEX_FILE, $index);
+}
+?>
