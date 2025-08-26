@@ -1,539 +1,571 @@
-// forum-bot.js - Self-contained version with Ollama Integration
-(function() {
-    // Make ForumBot available globally
-    window.ForumBot = {
-        // Configuration for Ollama
-        OLLAMA_BASE_URL: 'http://localhost:11434', // Your Ollama server URL
-        OLLAMA_MODEL: 'phi3:3.8b', // The specific Ollama model to use
-
-        instances: {}, // Stores state for each bot instance {id: {chatHistory: [], elementRefs: {}}}
-
-        // Initialize all bot instances on the page
-        init: function() {
-            console.log('Initializing Forum Bot for Ollama');
-
-            // Initialize Marked.js for Markdown rendering in bot responses
-            if (typeof marked === 'undefined') {
-                console.error("Marked.js is not loaded. Please ensure <script src='https://cdn.jsdelivr.net/npm/marked/marked.min.js'></script> is included.");
-                return;
-            }
-            marked.setOptions({
-                gfm: true,
-                breaks: true,
-                highlight: function(code, lang) {
-                    // Basic highlighting, can be extended with a syntax highlighter
-                    return code;
-                }
-            });
-
-            document.querySelectorAll('.forum-bot-container').forEach(container => {
-                const instanceId = container.dataset.id;
-                
-                // Skip if already initialized
-                if (container.dataset.initialized === 'true') {
-                    return;
-                }
-
-                this.instances[instanceId] = {
-                    chatHistory: [
-                        // System message to guide the AI's behavior
-                        { role: 'system', content: 'You are a helpful, friendly, and concise AI assistant named phi3-mini. Provide direct and relevant answers to user questions, and engage in natural conversation. Avoid overly technical jargon unless specifically asked.' },
-                        { role: 'assistant', content: container.querySelector('.message-content').textContent.trim() }
-                    ],
-                    elementRefs: {
-                        container: container,
-                        messagesDiv: container.querySelector('.forum-bot-messages'),
-                        input: container.querySelector('textarea'),
-                        sendBtn: container.querySelector('.bot-send-btn'),
-                        connectionStatusSpan: container.querySelector(`#${instanceId}-connection`)
-                    }
-                };
-
-                container.dataset.initialized = 'true'; // Mark as initialized
-
-                // Event Listeners
-                this.instances[instanceId].elementRefs.sendBtn.addEventListener('click', () => {
-                    this.sendMessage(instanceId);
-                });
-
-                this.instances[instanceId].elementRefs.input.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        this.sendMessage(instanceId);
-                    }
-                });
-
-                // Initial connection test
-                this.testOllamaConnection(instanceId);
-            });
-        },
-
-        // Test connection to Ollama and check for model availability
-        testOllamaConnection: async function(instanceId) {
-            const instance = this.instances[instanceId];
-            if (!instance) return;
-
-            const connectionStatusSpan = instance.elementRefs.connectionStatusSpan;
-            connectionStatusSpan.textContent = 'Connecting...';
-            connectionStatusSpan.style.color = '#ffa500'; // Orange for connecting
-
-            try {
-                // First, check if Ollama server is reachable
-                const tagsResponse = await fetch(this.OLLAMA_BASE_URL + '/api/tags');
-                if (!tagsResponse.ok) {
-                    throw new Error(`Ollama server not responding (${tagsResponse.status}). Is Ollama running?`);
-                }
-                const tagsData = await tagsResponse.json();
-
-                // Then, check if the specific model exists
-                const modelExists = tagsData.models.some(model =>
-                    model.name.includes(this.OLLAMA_MODEL) || model.name.includes(this.OLLAMA_MODEL.split(':')[0])
-                );
-
-                if (!modelExists) {
-                    connectionStatusSpan.textContent = 'Model Missing';
-                    connectionStatusSpan.style.color = '#ef4444'; // Red for missing model
-                    this.addMessage(instanceId, `System: Model "${this.OLLAMA_MODEL}" not found on Ollama. Please pull it using 'ollama pull ${this.OLLAMA_MODEL}'.`, 'system');
-                    return false;
-                }
-
-                connectionStatusSpan.textContent = 'Connected';
-                connectionStatusSpan.style.color = '#22c55e'; // Green for connected
-                this.addMessage(instanceId, `System: Connected to Ollama with model ${this.OLLAMA_MODEL}.`, 'system');
-                return true;
-
-            } catch (error) {
-                connectionStatusSpan.textContent = 'Disconnected';
-                connectionStatusSpan.style.color = '#ef4444'; // Red for disconnected
-                let errorMessage = `System: Connection to Ollama failed: ${error.message}.`;
-                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                    errorMessage += " Please ensure Ollama is running and accessible from your browser (check browser console for CORS errors).";
-                } else if (error.message.includes('403')) {
-                     errorMessage += " This might be a CORS issue. Try setting 'export OLLAMA_ORIGINS=\"*\"' and restarting Ollama.";
-                }
-                this.addMessage(instanceId, errorMessage, 'system error');
-                return false;
-            }
-        },
-
-        // Send a message to the Ollama bot
-        sendMessage: async function(instanceId) {
-            const instance = this.instances[instanceId];
-            if (!instance) return;
-
-            const userInput = instance.elementRefs.input;
-            const userMessage = userInput.value.trim();
-            if (!userMessage) return;
-
-            this.addMessage(instanceId, userMessage, 'user');
-            userInput.value = '';
-            this.showStatus(instanceId, 'Bot is typing...', 'loading');
-
-            // Add user message to chat history for context
-            instance.chatHistory.push({ role: 'user', content: userMessage });
-
-            const endpoint = '/v1/chat/completions'; // Ollama's OpenAI compatible endpoint
-            const fullUrl = this.OLLAMA_BASE_URL + endpoint;
-
-            try {
-                const payload = {
-                    model: this.OLLAMA_MODEL,
-                    messages: instance.chatHistory,
-                    stream: false // We are not using streaming for simplicity
-                };
-
-                const response = await fetch(fullUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    let errorDetails = `HTTP error! status: ${response.status}`;
-                    try {
-                        const errorJson = await response.json();
-                        if (errorJson && errorJson.error) {
-                            errorDetails += `: ${errorJson.error}`;
+// forum-bot.js - Forum Bot with TensorFlow.js integration
+const ForumBot = {
+    // Initialize all bot instances on the page
+    init() {
+        // Find all bot containers
+        const botContainers = document.querySelectorAll('.forum-bot-container');
+        
+        // Initialize each bot
+        botContainers.forEach(container => {
+            this.initializeBot(container);
+        });
+        
+        // Set up mutation observer to catch dynamically added bots
+        const observer = new MutationObserver(mutations => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList' && mutation.addedNodes.length) {
+                    // Process added nodes
+                    mutation.addedNodes.forEach(node => {
+                        // Check if the node is an element and has a bot container
+                        if (node.nodeType === 1) { // Element node
+                            const botContainers = node.querySelectorAll('.forum-bot-container');
+                            botContainers.forEach(container => {
+                                this.initializeBot(container);
+                            });
                         }
-                    } catch (e) { /* ignore if not JSON */ }
-                    throw new Error(errorDetails);
+                    });
                 }
-
-                const data = await response.json();
-                let botResponseContent = data.choices?.[0]?.message?.content || "Sorry, I couldn't get a response.";
-
-                // Add bot response to chat history
-                instance.chatHistory.push({ role: 'assistant', content: botResponseContent });
-                this.addMessage(instanceId, botResponseContent, 'bot');
-                this.showStatus(instanceId, 'Ready');
-
-            } catch (error) {
-                console.error(`Error fetching bot response for ${instanceId}:`, error);
-                this.addMessage(instanceId, `Oops! Something went wrong: ${error.message}`, 'system error');
-                this.showStatus(instanceId, 'Error', 'error');
             }
-        },
-
-        // Add a message to the chat display
-        addMessage: function(instanceId, text, senderType) {
-            const instance = this.instances[instanceId];
-            if (!instance) return;
-
-            const messagesDiv = instance.elementRefs.messagesDiv;
-            const messageWrapper = document.createElement('div');
-            messageWrapper.classList.add('bot-message');
-
-            const avatar = document.createElement('div');
-            avatar.classList.add('bot-avatar');
-            avatar.innerHTML = '<i class="fas fa-robot"></i>';
-
-            const messageContentDiv = document.createElement('div');
-            messageContentDiv.classList.add('message-content');
-
-            if (senderType === 'user') {
-                messageWrapper.classList.add('user-message');
-                messageContentDiv.textContent = text; // User input is plain text
-            } else if (senderType === 'system') {
-                messageContentDiv.innerHTML = `<span style="color: #ffa500; font-weight: bold;">System:</span> ${this.escapeHtml(text)}`;
-                messageContentDiv.style.backgroundColor = '#40444b'; // Darker background for system messages
-            } else if (senderType === 'system error') {
-                messageContentDiv.innerHTML = `<span style="color: #ef4444; font-weight: bold;">Error:</span> ${this.escapeHtml(text)}`;
-                messageContentDiv.style.backgroundColor = '#40444b'; // Darker background for system messages
-            } else {
-                // Process Markdown for bot messages
-                messageContentDiv.innerHTML = marked.parse(text);
-            }
-
-            if (senderType === 'user') {
-                messageWrapper.appendChild(messageContentDiv);
-            } else {
-                messageWrapper.appendChild(avatar);
-                messageWrapper.appendChild(messageContentDiv);
-            }
-
-            messagesDiv.appendChild(messageWrapper);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom
-        },
-
-        // Show status message (e.g., "Bot is typing...", "Ready", "Error")
-        showStatus: function(instanceId, message, type = 'info') {
-            const instance = this.instances[instanceId];
-            if (!instance) return;
-
-            const connectionStatusSpan = instance.elementRefs.connectionStatusSpan;
-            connectionStatusSpan.innerHTML = ''; // Clear previous content
-
-            const statusText = document.createElement('span');
-            statusText.textContent = message;
-
-            if (type === 'loading') {
-                const loadingDots = document.createElement('div');
-                loadingDots.classList.add('dot-flashing');
-                connectionStatusSpan.appendChild(loadingDots);
-                connectionStatusSpan.appendChild(statusText);
-            } else if (type === 'error') {
-                statusText.style.color = '#ef4444'; // Red
-                connectionStatusSpan.appendChild(statusText);
-            } else if (type === 'success') {
-                statusText.style.color = '#22c55e'; // Green
-                connectionStatusSpan.appendChild(statusText);
-            } else { // info or default
-                statusText.style.color = '#60a5fa'; // Blue
-                connectionStatusSpan.appendChild(statusText);
-            }
-        },
-
-        // Escape HTML to prevent XSS
-        escapeHtml: function(text) {
-            try {
-                if (typeof text !== 'string') {
-                    return '';
-                }
-                return text
-                    .replace(/&/g, "&amp;")
-                    .replace(/</g, "&lt;")
-                    .replace(/>/g, "&gt;")
-                    .replace(/"/g, "&quot;")
-                    .replace(/'/g, "&#039;");
-            } catch (error) {
-                console.error('Error escaping HTML:', error);
-                return '';
-            }
-        }
-    };
-
-    // Add CSS for the bot if not already present
-    function addBotStyles() {
-        if (document.getElementById('forum-bot-styles')) {
+        });
+        
+        // Observe the document body
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
+        console.log('Forum Bot initialized with mutation observer');
+        
+        // Load TensorFlow.js
+        this.loadTensorFlow();
+    },
+    
+    // Initialize a single bot container
+    initializeBot(container) {
+        const botId = container.dataset.id;
+        const botName = container.dataset.name;
+        
+        // Skip if already initialized
+        if (container.dataset.initialized === 'true') {
             return;
         }
-
-        const styleEl = document.createElement('style');
-        styleEl.id = 'forum-bot-styles';
-        styleEl.textContent = `
-            /* Forum Bot Styles */
-            .forum-bot-container {
-                background-color: #36393f;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-                margin: 15px 0;
-                overflow: hidden;
-                font-family: 'Inter', sans-serif;
-                color: #e2e8f0;
+        
+        // Mark as initialized
+        container.dataset.initialized = 'true';
+        
+        // Get elements
+        const messagesContainer = document.getElementById(`${botId}-messages`);
+        const inputField = document.getElementById(`${botId}-input`);
+        const sendButton = container.querySelector('.bot-send-btn');
+        
+        // Add event listener for send button
+        sendButton.addEventListener('click', () => {
+            this.sendMessage(botId, inputField.value);
+            inputField.value = '';
+        });
+        
+        // Add event listener for enter key
+        inputField.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendMessage(botId, inputField.value);
+                inputField.value = '';
             }
-
-            .forum-bot-header {
-                background-color: #2f3136;
-                padding: 10px 15px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                font-weight: bold;
-                font-size: 1.1em;
-                border-bottom: 1px solid #23272a;
+        });
+        
+        console.log(`Bot "${botName}" (${botId}) initialized`);
+    },
+    
+    // Send a message to the bot
+    sendMessage(botId, message) {
+        if (!message.trim()) return;
+        
+        const messagesContainer = document.getElementById(`${botId}-messages`);
+        
+        // Add user message
+        this.addMessage(messagesContainer, message, 'user');
+        
+        // Process message and get response
+        this.processMessage(botId, message)
+            .then(response => {
+                // Add bot response
+                this.addMessage(messagesContainer, response, 'bot');
+                
+                // Save interaction with response for training
+                this.saveInteraction(botId, message, response);
+            })
+            .catch(error => {
+                console.error('Error processing message:', error);
+                this.addMessage(messagesContainer, 'Sorry, I encountered an error.', 'bot');
+            });
+    },
+    
+    // Add a message to the chat
+    addMessage(container, message, sender) {
+        const messageElement = document.createElement('div');
+        messageElement.className = sender === 'user' ? 'user-message' : 'bot-message';
+        
+        let content = '';
+        
+        if (sender === 'bot') {
+            content = `
+                <div class="bot-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="message-content">${this.escapeHtml(message)}</div>
+            `;
+        } else {
+            content = `
+                <div class="message-content">${this.escapeHtml(message)}</div>
+            `;
+        }
+        
+        messageElement.innerHTML = content;
+        container.appendChild(messageElement);
+        
+        // Scroll to bottom
+        container.scrollTop = container.scrollHeight;
+    },
+    
+    // Process message and generate response
+    async processMessage(botId, message) {
+        // If TensorFlow is loaded and model is available, use it
+        if (window.tf && this.model) {
+            try {
+                return await this.generateResponse(message);
+            } catch (error) {
+                console.error('Error generating response with TensorFlow:', error);
+                // Fall back to basic response
             }
-
-            .forum-bot-header i {
-                color: #7289da;
-                margin-right: 8px;
+        }
+        
+        // Basic response logic if TensorFlow isn't ready
+        const responses = [
+            "That's interesting! Tell me more.",
+            "I'm still learning, but that sounds fascinating.",
+            "I appreciate your input. It helps me learn.",
+            "I don't fully understand yet, but I'm learning from our conversation.",
+            "Thanks for chatting with me!",
+            "I'm processing that information. Can you elaborate?",
+            "That's a good point. What else would you like to discuss?",
+            "I'm designed to learn from interactions like this."
+        ];
+        
+        return responses[Math.floor(Math.random() * responses.length)];
+    },
+    
+    // Generate response using TensorFlow model
+    async generateResponse(message) {
+        if (!window.tf || !this.model) {
+            throw new Error('TensorFlow or model not loaded');
+        }
+        
+        try {
+            // Tokenize the message (convert to lowercase, remove punctuation, split into words)
+            const tokens = message.toLowerCase()
+                .replace(/[^\w\s]/g, '')
+                .split(/\s+/)
+                .filter(Boolean);
+            
+            // If we have a wordIndex and tokens, encode the input
+            if (this.wordIndex && tokens.length > 0) {
+                // Map tokens to indices, replace unknown words with 0
+                const indices = tokens.map(token => this.wordIndex[token] || 0);
+                
+                // Pad sequence to maxLength
+                const paddedIndices = this.padSequence(indices, this.maxSeqLength);
+                
+                // Convert to tensor
+                const inputTensor = tf.tensor2d([paddedIndices], [1, this.maxSeqLength]);
+                
+                // Get prediction
+                const output = this.model.predict(inputTensor);
+                const scores = await output.data();
+                
+                // Find most likely class
+                const predIndex = scores.indexOf(Math.max(...scores));
+                
+                // Convert to response
+                if (predIndex && this.responseClasses && this.responseClasses[predIndex]) {
+                    return this.responseClasses[predIndex];
+                }
             }
-
-            /* Hidden elements for simplified UI */
-            .bot-type-toggle {
-                display: none;
+            
+            // Default response if prediction failed
+            return "I'm thinking about what you said. My neural network is still learning.";
+            
+        } catch (error) {
+            console.error('Error generating response with TensorFlow:', error);
+            return "I'm having trouble processing that with my neural network. Can we try something else?";
+        }
+    },
+    
+    // Pad sequence to a fixed length
+    padSequence(sequence, length) {
+        if (sequence.length > length) {
+            return sequence.slice(0, length);
+        }
+        return [...Array(length - sequence.length).fill(0), ...sequence];
+    },
+    
+    // Load TensorFlow.js
+    loadTensorFlow() {
+        // Check if TensorFlow is already loaded
+        if (window.tf) {
+            console.log('TensorFlow already loaded, initializing model');
+            this.initTensorFlow();
+            return;
+        }
+        
+        // Create script tag
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js';
+        script.async = true;
+        
+        script.onload = () => {
+            console.log('TensorFlow.js loaded successfully');
+            this.initTensorFlow();
+        };
+        
+        script.onerror = () => {
+            console.error('Failed to load TensorFlow.js');
+        };
+        
+        // Add to document
+        document.head.appendChild(script);
+    },
+    
+    // Initialize TensorFlow model
+    async initTensorFlow() {
+        try {
+            // Try to load existing model from IndexedDB
+            try {
+                this.model = await tf.loadLayersModel('indexeddb://forum-bot-model');
+                console.log('Loaded existing model from IndexedDB');
+                
+                // Load word index and response classes
+                await this.loadModelMetadata();
+            } catch (e) {
+                console.log('No existing model found, creating new one');
+                await this.createNewModel();
             }
-
-            .forum-bot-messages {
-                height: 250px; /* Fixed height for chat area */
-                overflow-y: auto;
-                padding: 15px;
-                display: flex;
-                flex-direction: column-reverse; /* New messages at bottom */
-                gap: 10px;
-                background-color: #36393f;
+            
+            // Schedule periodic training
+            this.scheduleTraining();
+        } catch (error) {
+            console.error('Error initializing TensorFlow:', error);
+        }
+    },
+    
+    // Create a new model
+    async createNewModel() {
+        // Default values
+        this.maxSeqLength = 10;
+        this.vocabSize = 1000;
+        this.numClasses = 10;
+        
+        // Create sequential model
+        this.model = tf.sequential();
+        
+        // Add layers
+        this.model.add(tf.layers.embedding({
+            inputDim: this.vocabSize,
+            outputDim: 64,
+            inputLength: this.maxSeqLength
+        }));
+        
+        this.model.add(tf.layers.globalAveragePooling1d());
+        
+        this.model.add(tf.layers.dense({
+            units: 32,
+            activation: 'relu'
+        }));
+        
+        this.model.add(tf.layers.dense({
+            units: this.numClasses,
+            activation: 'softmax'
+        }));
+        
+        // Compile model
+        this.model.compile({
+            optimizer: 'adam',
+            loss: 'categoricalCrossentropy',
+            metrics: ['accuracy']
+        });
+        
+        // Initialize empty word index and response classes
+        this.wordIndex = {};
+        this.responseClasses = [
+            "I'm still learning how to respond properly.",
+            "That's interesting! Tell me more.",
+            "I'm not sure I understand. Could you explain differently?",
+            "I'm processing what you said.",
+            "Thanks for your message!",
+            "I'm designed to learn from our conversations.",
+            "That's a good point.",
+            "I'd like to hear more about that.",
+            "Let me think about that for a moment.",
+            "That's valuable input for my learning."
+        ];
+        
+        // Save model
+        await this.saveModel();
+        
+        console.log('Created and saved new model');
+    },
+    
+    // Load word index and response classes
+    async loadModelMetadata() {
+        try {
+            const response = await fetch('bot_handler.php?action=get_metadata');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.wordIndex = data.wordIndex || {};
+                this.responseClasses = data.responseClasses || [];
+                this.maxSeqLength = data.maxSeqLength || 10;
+                console.log('Loaded model metadata', 
+                    Object.keys(this.wordIndex).length, 'words,',
+                    this.responseClasses.length, 'response classes');
+            } else {
+                throw new Error('Failed to load model metadata');
             }
-
-            .forum-bot-messages::-webkit-scrollbar {
-                width: 8px;
+        } catch (error) {
+            console.error('Error loading model metadata:', error);
+            // Create defaults
+            this.wordIndex = {};
+            this.responseClasses = [
+                "I'm still learning how to respond properly.",
+                "That's interesting! Tell me more.",
+                "I'm not sure I understand. Could you explain differently?",
+                "I'm processing what you said.",
+                "Thanks for your message!",
+                "I'm designed to learn from our conversations.",
+                "That's a good point.",
+                "I'd like to hear more about that.",
+                "Let me think about that for a moment.",
+                "That's valuable input for my learning."
+            ];
+            this.maxSeqLength = 10;
+        }
+    },
+    
+    // Save model to IndexedDB and metadata to server
+    async saveModel() {
+        try {
+            // Save model to IndexedDB
+            await this.model.save('indexeddb://forum-bot-model');
+            
+            // Save metadata to server
+            const response = await fetch('bot_handler.php?action=save_metadata', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    wordIndex: this.wordIndex,
+                    responseClasses: this.responseClasses,
+                    maxSeqLength: this.maxSeqLength
+                })
+            });
+            
+            const result = await response.json();
+            if (!result.success) {
+                console.error('Error saving metadata:', result.error);
             }
-
-            .forum-bot-messages::-webkit-scrollbar-track {
-                background: #23272A;
-                border-radius: 10px;
+        } catch (error) {
+            console.error('Error saving model:', error);
+        }
+    },
+    
+    // Schedule periodic training
+    scheduleTraining() {
+        // Train once when initialized
+        setTimeout(() => this.trainModel(), 10000);
+        
+        // Then train periodically
+        setInterval(() => this.trainModel(), 3600000); // Every hour
+    },
+    
+    // Train model with new interactions
+    async trainModel() {
+        try {
+            console.log('Starting model training...');
+            
+            // Fetch interactions from server
+            const response = await fetch('bot_handler.php?action=get_interactions');
+            const data = await response.json();
+            
+            if (!data.success || !data.interactions || data.interactions.length === 0) {
+                console.log('No interactions available for training');
+                return;
             }
-
-            .forum-bot-messages::-webkit-scrollbar-thumb {
-                background: #50555c;
-                border-radius: 10px;
+            
+            const interactions = data.interactions;
+            console.log(`Training with ${interactions.length} interactions`);
+            
+            // Update word index from new messages
+            this.updateWordIndex(interactions);
+            
+            // Prepare training data
+            const { inputs, outputs } = this.prepareTrainingData(interactions);
+            
+            if (!inputs || inputs.length === 0) {
+                console.log('No valid training data generated');
+                return;
             }
-
-            .forum-bot-messages::-webkit-scrollbar-thumb:hover {
-                background: #6a707a;
+            
+            // Convert to tensors
+            const xs = tf.tensor2d(inputs, [inputs.length, this.maxSeqLength]);
+            const ys = tf.tensor2d(outputs, [outputs.length, this.numClasses]);
+            
+            // Train model
+            const trainResult = await this.model.fit(xs, ys, {
+                epochs: 5,
+                batchSize: Math.min(32, inputs.length),
+                shuffle: true,
+                verbose: 1
+            });
+            
+            console.log('Training completed.', trainResult.history);
+            
+            // Cleanup tensors
+            xs.dispose();
+            ys.dispose();
+            
+            // Save updated model
+            await this.saveModel();
+            
+        } catch (error) {
+            console.error('Error training model:', error);
+        }
+    },
+    
+    // Update word index with new words from interactions
+    updateWordIndex(interactions) {
+        // Extract all user messages
+        const allMessages = interactions.map(interaction => interaction.userMessage);
+        
+        // Generate set of all words
+        const allWords = new Set();
+        
+        allMessages.forEach(message => {
+            if (!message) return;
+            
+            const words = message.toLowerCase()
+                .replace(/[^\w\s]/g, '')
+                .split(/\s+/)
+                .filter(Boolean);
+                
+            words.forEach(word => allWords.add(word));
+        });
+        
+        // Get words that aren't already in wordIndex
+        const newWords = Array.from(allWords).filter(word => !this.wordIndex[word]);
+        
+        // Add new words to wordIndex
+        let nextIndex = Object.keys(this.wordIndex).length + 1;
+        newWords.forEach(word => {
+            this.wordIndex[word] = nextIndex++;
+        });
+        
+        console.log(`Added ${newWords.length} new words to wordIndex. Total: ${nextIndex - 1}`);
+        
+        // Update vocabSize
+        this.vocabSize = Math.max(this.vocabSize, nextIndex);
+    },
+    
+    // Prepare training data from interactions
+    prepareTrainingData(interactions) {
+        const inputs = [];
+        const outputs = [];
+        
+        interactions.forEach(interaction => {
+            if (!interaction.userMessage || !interaction.botResponse) return;
+            
+            // Tokenize user message
+            const tokens = interaction.userMessage.toLowerCase()
+                .replace(/[^\w\s]/g, '')
+                .split(/\s+/)
+                .filter(Boolean);
+                
+            if (tokens.length === 0) return;
+            
+            // Convert tokens to indices
+            const indices = tokens.map(token => this.wordIndex[token] || 0);
+            
+            // Pad or truncate to maxSeqLength
+            const paddedIndices = this.padSequence(indices, this.maxSeqLength);
+            
+            // Determine output class (simplified - in a real system, would use more sophisticated logic)
+            // Here we'll just use the first few words of the bot response to determine class
+            const responseStart = interaction.botResponse.toLowerCase().substring(0, 20);
+            
+            // Find matching response class or add a new one if needed
+            let classIndex = this.responseClasses.findIndex(rc => 
+                responseStart.includes(rc.toLowerCase().substring(0, 10)));
+                
+            if (classIndex === -1 && this.responseClasses.length < this.numClasses) {
+                // Add new response class if we have room
+                classIndex = this.responseClasses.length;
+                this.responseClasses.push(interaction.botResponse);
+            } else if (classIndex === -1) {
+                // Use random existing class if we're full
+                classIndex = Math.floor(Math.random() * this.numClasses);
             }
-
-            .bot-message {
-                display: flex;
-                align-items: flex-start;
-                max-width: 85%;
-                animation: fadeIn 0.3s ease-out;
+            
+            // Create one-hot encoded output
+            const output = Array(this.numClasses).fill(0);
+            output[classIndex] = 1;
+            
+            inputs.push(paddedIndices);
+            outputs.push(output);
+        });
+        
+        return { inputs, outputs };
+    },
+    
+    // Save interaction to server for training
+    saveInteraction(botId, userMessage, botResponse) {
+        // Prepare data
+        const data = {
+            botId: botId,
+            userMessage: userMessage,
+            botResponse: botResponse,
+            timestamp: Date.now()
+        };
+        
+        // Send to server
+        fetch('bot_handler.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (!result.success) {
+                console.error('Error saving interaction:', result.error);
             }
-
-            .user-message {
-                margin-left: auto;
-                flex-direction: row-reverse; /* User message on right */
-            }
-
-            .bot-avatar {
-                width: 30px;
-                height: 30px;
-                min-width: 30px; /* Prevent shrinking */
-                min-height: 30px; /* Prevent shrinking */
-                background: #5865f2;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-                font-size: 0.8em;
-                margin-right: 8px;
-            }
-
-            .user-message .bot-avatar {
-                background: #7289da;
-                margin-left: 8px;
-                margin-right: 0;
-            }
-
-            .message-content {
-                background-color: #40444b;
-                padding: 8px 12px;
-                border-radius: 12px;
-                line-height: 1.4;
-                word-wrap: break-word;
-                overflow-wrap: break-word;
-                font-size: 0.9em;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            }
-
-            .user-message .message-content {
-                background-color: #7289da;
-            }
-
-            .forum-bot-input {
-                display: flex;
-                padding: 10px 15px;
-                border-top: 1px solid #23272a;
-                background-color: #2f3136;
-                align-items: center;
-            }
-
-            .forum-bot-input textarea {
-                flex-grow: 1;
-                border: 1px solid #40444b;
-                border-radius: 5px;
-                padding: 8px 10px;
-                margin-right: 10px;
-                resize: none;
-                height: 38px; /* Fixed height for single line */
-                min-height: 38px;
-                max-height: 100px; /* Max height for multi-line */
-                background-color: #40444b;
-                color: #e2e8f0;
-                font-size: 0.9em;
-                overflow-y: auto;
-            }
-
-            .forum-bot-input textarea:focus {
-                outline: none;
-                border-color: #7289da;
-                box-shadow: 0 0 0 2px rgba(114, 137, 218, 0.5);
-            }
-
-            .bot-send-btn {
-                background-color: #7289da;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 8px 15px;
-                cursor: pointer;
-                font-size: 0.9em;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: background-color 0.2s ease;
-                height: 38px;
-            }
-
-            .bot-send-btn:hover {
-                background-color: #677bc4;
-            }
-
-            .bot-send-btn i {
-                margin-right: 5px;
-            }
-
-            .forum-bot-footer {
-                background-color: #2f3136;
-                padding: 5px 15px;
-                font-size: 0.75em;
-                color: #a0aec0;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                border-top: 1px solid #23272a;
-            }
-
-            .bot-status {
-                display: flex;
-                align-items: center;
-                gap: 5px;
-                font-size: 0.8em;
-            }
-
-            .dot-flashing {
-                position: relative;
-                width: 6px;
-                height: 6px;
-                border-radius: 3px;
-                background-color: #7289da;
-                color: #7289da;
-                animation: dotFlashing 1s infinite linear alternate;
-                animation-delay: .5s;
-            }
-
-            .dot-flashing::before, .dot-flashing::after {
-                content: '';
-                display: inline-block;
-                position: absolute;
-                top: 0;
-            }
-
-            .dot-flashing::before {
-                left: -9px;
-                width: 6px;
-                height: 6px;
-                border-radius: 3px;
-                background-color: #7289da;
-                color: #7289da;
-                animation: dotFlashing 1s infinite linear alternate;
-                animation-delay: 0s;
-            }
-
-            .dot-flashing::after {
-                left: 9px;
-                width: 6px;
-                height: 6px;
-                border-radius: 3px;
-                background-color: #7289da;
-                color: #7289da;
-                animation: dotFlashing 1s infinite linear alternate;
-                animation-delay: 1s;
-            }
-
-            @keyframes dotFlashing {
-                0% { background-color: #7289da; }
-                50%, 100% { background-color: #4b5262; }
-            }
-
-            @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(5px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-        `;
-        document.head.appendChild(styleEl);
+        })
+        .catch(error => {
+            console.error('Error sending interaction to server:', error);
+        });
+    },
+    
+    // Escape HTML to prevent XSS
+    escapeHtml(text) {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
+};
 
-    // Add styles on load
-    addBotStyles();
-
-    // Auto-initialize after a short delay to ensure DOM is ready
-    setTimeout(() => {
-        window.ForumBot.init();
-    }, 500);
-
-    // Also set up a mutation observer to catch dynamically added bots
-    const observer = new MutationObserver((mutations) => {
-        let shouldInit = false;
-        for (const mutation of mutations) {
-            if (mutation.type === 'childList' && mutation.addedNodes.length) {
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === 1) { // Element node
-                        if ((node.classList && node.classList.contains('forum-bot-container')) ||
-                            node.querySelector('.forum-bot-container')) {
-                            shouldInit = true;
-                        }
-                    }
-                });
-            }
-        }
-        if (shouldInit && window.ForumBot) {
-            window.ForumBot.init();
-        }
-    });
-
-    // Start observing the document body
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
-})();
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    ForumBot.init();
+});

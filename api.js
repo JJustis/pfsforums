@@ -338,11 +338,17 @@ async loadUserPlacard(username, placardElementId) {
             
             const response = await fetch(url, options);
             
+            const json = await response.json();
+            
+            // Check for maintenance mode
+            if (json.maintenanceMode || response.status === 503) {
+                this.handleMaintenanceMode(json);
+                throw new Error(json.message || 'System is in maintenance mode');
+            }
+            
             if (!response.ok) {
                 throw new Error(`HTTP error! Status: ${response.status}`);
             }
-            
-            const json = await response.json();
             
             if (!json.success) {
                 throw new Error(json.error || 'Unknown API error');
@@ -353,5 +359,103 @@ async loadUserPlacard(username, placardElementId) {
             console.error('API request error:', error);
             throw error;
         }
+    },
+    
+    // Handle maintenance mode
+    handleMaintenanceMode(response) {
+        console.log('System is in maintenance mode:', response);
+        
+        // Show maintenance modal
+        this.showMaintenanceModal(response);
+        
+        // Clear user session data
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        
+        // Disable all form submissions and navigation
+        this.disableUserInteractions();
+    },
+    
+    // Show maintenance mode modal
+    showMaintenanceModal(response) {
+        // Remove any existing maintenance modal
+        const existingModal = document.getElementById('maintenance-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Create maintenance modal
+        const modal = document.createElement('div');
+        modal.id = 'maintenance-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            color: white;
+            font-family: Arial, sans-serif;
+        `;
+        
+        const modalContent = document.createElement('div');
+        modalContent.style.cssText = `
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        `;
+        
+        modalContent.innerHTML = `
+            <i class="fas fa-tools" style="font-size: 3rem; color: #ffd700; margin-bottom: 20px;"></i>
+            <h2 style="margin: 0 0 15px 0;">System Maintenance</h2>
+            <p style="margin: 0 0 20px 0; line-height: 1.6;">${response.message || 'The forum is currently undergoing maintenance. Please try again in a few minutes.'}</p>
+            <div style="background: rgba(255, 255, 255, 0.1); padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                <i class="fas fa-sync-alt fa-spin" style="margin-right: 10px;"></i>
+                Daily security re-encryption in progress...
+            </div>
+            <button id="maintenance-refresh" style="
+                background: rgba(255, 255, 255, 0.2);
+                color: white;
+                border: 2px solid rgba(255, 255, 255, 0.3);
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 1rem;
+            ">
+                <i class="fas fa-refresh"></i> Refresh Page
+            </button>
+        `;
+        
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+        
+        // Add refresh button functionality
+        document.getElementById('maintenance-refresh').onclick = () => {
+            window.location.reload();
+        };
+    },
+    
+    // Disable user interactions during maintenance
+    disableUserInteractions() {
+        // Disable all forms
+        const forms = document.querySelectorAll('form');
+        forms.forEach(form => {
+            form.style.pointerEvents = 'none';
+            form.style.opacity = '0.5';
+        });
+        
+        // Disable navigation links
+        const navLinks = document.querySelectorAll('.nav-link');
+        navLinks.forEach(link => {
+            link.style.pointerEvents = 'none';
+            link.style.opacity = '0.5';
+        });
     }
 };

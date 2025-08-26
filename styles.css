@@ -307,10 +307,14 @@ textarea.form-control {
 }
 
 .features {
-    padding: 2rem;
-    background-color: rgba(255, 255, 255, 0.9);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-md);
+	  background-image: url('https://secupgrade.com/dashboard/uploads/68243bed91f15.png');
+  background-size: cover;       /* Make it cover the whole area */
+  background-repeat: no-repeat; /* Don't tile the image */
+  background-position: center;  /* Center the image */
+    background-color: var(--card-bg);
+	padding: 20;
+
+    box-shadow: 0 4px 20px var(--shadow-color);;
 }
 
 .features h2 {
@@ -358,11 +362,12 @@ textarea.form-control {
 }
 
 .forum-header {
-    padding: 1.5rem;
+	  background-image: url('https://secupgrade.com/dashboard/uploads/banner-2.png');
+  background-size: cover;       /* Make it cover the whole area */
+  background-repeat: no-repeat; /* Don't tile the image */
+	padding: 20;
 
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+  background-position: center;  /* Center the image */
 }
 
 .forum-header h2 {

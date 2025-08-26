@@ -179,20 +179,29 @@
 [2025-05-30 03:49:53] Request received: {"action":"list","username":"Admin","token":"eyJ1c2VySWQiOiJmNTBiYjUxNTk5NzU3NDJkYzEwMzZhYzZiN2QyMzdiOCIsImV4cCI6MTc0OTE3MzgxNiwiaWF0IjoxNzQ4NTY5MDE2fQ=="}
 [2025-05-30 03:49:53] Filtering products for owner: Admin
 [2025-05-30 03:49:53] Found 1 products for Admin
-[2025-06-06 00:22:17] Request received: {"action":"list","username":"Admin","token":"eyJ1c2VySWQiOiI5NzgxMDU5NTk1ZDJiOWE5MTJkOTJmYzQyNjI0NTk3NiIsImV4cCI6MTc0OTc2Njg5MywiaWF0IjoxNzQ5MTYyMDkzfQ=="}
-[2025-06-06 00:22:17] Filtering products for owner: Admin
-[2025-06-06 00:22:17] Found 1 products for Admin
-[2025-06-06 00:32:43] Request received: {"action":"list","username":"Admin","token":"eyJ1c2VySWQiOiI5NzgxMDU5NTk1ZDJiOWE5MTJkOTJmYzQyNjI0NTk3NiIsImV4cCI6MTc0OTc2Njk0OSwiaWF0IjoxNzQ5MTYyMTQ5fQ=="}
-[2025-06-06 00:32:43] Filtering products for owner: Admin
-[2025-06-06 00:32:43] Found 1 products for Admin
-[2025-06-13 19:53:05] Request received: {"action":"list","username":"Admin","token":"eyJ1c2VySWQiOiJjY2FjNjU5ZWRmOGUzNWRkMzFkOWRlZDdiN2VkZTEwYyIsImV4cCI6MTc1MDQ0MTg2MiwiaWF0IjoxNzQ5ODM3MDYyfQ=="}
-[2025-06-13 19:53:05] Filtering products for owner: Admin
-[2025-06-13 19:53:05] Found 1 products for Admin
-[2025-06-13 19:53:19] Request received: {"action":"delete"}
-[2025-06-13 19:53:19] Delete operation requested (mock response)
-[2025-06-13 19:53:19] Request received: {"action":"list","username":"Admin","token":"eyJ1c2VySWQiOiJjY2FjNjU5ZWRmOGUzNWRkMzFkOWRlZDdiN2VkZTEwYyIsImV4cCI6MTc1MDQ0MTg2MiwiaWF0IjoxNzQ5ODM3MDYyfQ=="}
-[2025-06-13 19:53:19] Filtering products for owner: Admin
-[2025-06-13 19:53:19] Found 1 products for Admin
-[2025-06-13 20:57:54] Request received: {"action":"list","username":"Admin","token":"eyJ1c2VySWQiOiJjY2FjNjU5ZWRmOGUzNWRkMzFkOWRlZDdiN2VkZTEwYyIsImV4cCI6MTc1MDQ0MTg2MiwiaWF0IjoxNzQ5ODM3MDYyfQ=="}
-[2025-06-13 20:57:54] Filtering products for owner: Admin
-[2025-06-13 20:57:54] Found 1 products for Admin
+[2025-07-28 19:58:34] Request received: {"action":"list","username":"Admin","token":"eyJ1c2VySWQiOiI1MzUwYTBkMzhjOGNlYWQ3MDA1OTZkNGYyNjYxZTZiZiIsImV4cCI6MTc1NDI1OTg1MCwiaWF0IjoxNzUzNjU1MDUwfQ=="}
+[2025-07-28 19:58:34] Filtering products for owner: Admin
+[2025-07-28 19:58:34] Found 1 products for Admin
+[2025-07-28 21:25:48] Request received: {"action":"list","username":"Admin","token":"eyJ1c2VySWQiOiI1MzUwYTBkMzhjOGNlYWQ3MDA1OTZkNGYyNjYxZTZiZiIsImV4cCI6MTc1NDI1OTg1MCwiaWF0IjoxNzUzNjU1MDUwfQ=="}
+[2025-07-28 21:25:48] Filtering products for owner: Admin
+[2025-07-28 21:25:48] Found 1 products for Admin
+[2025-07-28 21:26:37] Request received: {"action":"delete"}
+[2025-07-28 21:26:37] Delete operation requested (mock response)
+[2025-07-28 21:26:37] Request received: {"action":"list","username":"Admin","token":"eyJ1c2VySWQiOiI1MzUwYTBkMzhjOGNlYWQ3MDA1OTZkNGYyNjYxZTZiZiIsImV4cCI6MTc1NDI1OTg1MCwiaWF0IjoxNzUzNjU1MDUwfQ=="}
+[2025-07-28 21:26:37] Filtering products for owner: Admin
+[2025-07-28 21:26:37] Found 1 products for Admin
+[2025-07-29 01:49:59] Request received: {"action":"list","username":"Vikerus","token":"eyJ1c2VySWQiOiJkNGNlZWY3YThiZTczMmIxM2VkYjMxYTk4NDg5NDBiYyIsImV4cCI6MTc1NDM1MTE4OSwiaWF0IjoxNzUzNzQ2Mzg5fQ=="}
+[2025-07-29 01:49:59] Filtering products for owner: Vikerus
+[2025-07-29 01:49:59] Found 0 products for Vikerus
+[2025-08-25 11:52:15] Request received: {"action":"list","username":"Vikerus","token":"eyJ1c2VySWQiOiIzMzVjM2FhNzY3N2MwZDMxMDBiMzgyNmUxYzhmYjM1ZiIsImV4cCI6MTc1NjcyMDI5NiwiaWF0IjoxNzU2MTE1NDk2fQ=="}
+[2025-08-25 11:52:15] Filtering products for owner: Vikerus
+[2025-08-25 11:52:15] Found 0 products for Vikerus
+[2025-08-25 11:58:54] Request received: {"action":"list","username":"Admin","token":"eyJ1c2VySWQiOiJjMjY4MjFkMjVjMTM5NDgzMjJhODk0ZGM2N2ZkODBkYSIsImV4cCI6MTc1NjcyMDU5NCwiaWF0IjoxNzU2MTE1Nzk0fQ=="}
+[2025-08-25 11:58:54] Filtering products for owner: Admin
+[2025-08-25 11:58:54] Found 1 products for Admin
+[2025-08-25 12:03:16] Request received: {"action":"list","username":"Admin","token":"eyJ1c2VySWQiOiJjMjY4MjFkMjVjMTM5NDgzMjJhODk0ZGM2N2ZkODBkYSIsImV4cCI6MTc1NjcyMDc2MSwiaWF0IjoxNzU2MTE1OTYxfQ=="}
+[2025-08-25 12:03:16] Filtering products for owner: Admin
+[2025-08-25 12:03:16] Found 1 products for Admin
+[2025-08-25 12:06:46] Request received: {"action":"list","username":"Admin","token":"eyJ1c2VySWQiOiJjMjY4MjFkMjVjMTM5NDgzMjJhODk0ZGM2N2ZkODBkYSIsImV4cCI6MTc1NjcyMDc2MSwiaWF0IjoxNzU2MTE1OTYxfQ=="}
+[2025-08-25 12:06:46] Filtering products for owner: Admin
+[2025-08-25 12:06:46] Found 1 products for Admin

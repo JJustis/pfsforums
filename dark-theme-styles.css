@@ -858,10 +858,12 @@ Key Improvements
     overflow: hidden;
 }
 [data-theme="dark"] .forum-header {
-	  background-image: url('https://jcmc.serveminecraft.net/dashboard/uploads/banner-2.png');
+	  background-image: url('https://secupgrade.com/dashboard/uploads/banner-2.png');
   background-size: cover;       /* Make it cover the whole area */
   background-repeat: no-repeat; /* Don't tile the image */
   background-position: center;  /* Center the image */
+  	padding: 20;
+
 }
 [data-theme="dark"] .modal-header,
 [data-theme="dark"] .modal-footer {
@@ -983,12 +985,15 @@ Key Improvements
 /* Hero section */
 [data-theme="dark"] .hero, 
 [data-theme="dark"] .features {
-	  background-image: url('https://jcmc.serveminecraft.net/dashboard/uploads/68243bed91f15.png');
+	  background-image: url('https://secupgrade.com/dashboard/uploads/68243bed91f15.png');
   background-size: cover;       /* Make it cover the whole area */
   background-repeat: no-repeat; /* Don't tile the image */
   background-position: center;  /* Center the image */
     background-color: var(--card-bg);
     box-shadow: 0 4px 20px var(--shadow-color);
+
+	padding: 20;
+
 }
 
 [data-theme="dark"] .feature-card {

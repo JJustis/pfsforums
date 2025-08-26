@@ -1198,7 +1198,7 @@ document.head.appendChild(botStyles);
 
 <!-- Updated FreeChat Integration -->
 <link rel="stylesheet" href="forum-bot.css">
-<script src='https://cdn.jsdelivr.net/npm/marked/marked.min.js'></script>
+
 <script src="js/freechat-integration.js"></script>
 <script src="js/article-integration.js"></script>
     <!-- Toast Notifications -->
@@ -1209,6 +1209,7 @@ document.head.appendChild(botStyles);
     <script src="js/api.js"></script>
 	 <script src="js/markup.js"></script>
 	<script src="forum-bot.js"></script>
+	<script src="mat.js"></script>
 
     <script src="js/app.js"></script> <script src="js/recentthreads.js"></script><script src="js/theme-toggle.js"></script>
 	 

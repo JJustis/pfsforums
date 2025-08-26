@@ -34,9 +34,6 @@ if (!file_exists(DATA_DIR)) {
 // Get action from the request
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
-// Check if we need to re-encrypt data files
-checkDailyEncryption();
-
 // Handle different actions
 switch ($action) {
     case 'check_admin':
@@ -710,61 +707,6 @@ function getEncryptionStatus() {
     ]);
 }
 
-// Check if encryption needs to be updated for today
-function checkDailyEncryption() {
-    $today = date('Y-m-d');
-    $encryptionMeta = loadEncryptionMeta();
-    
-    // Check if re-encryption is needed
-    if ($encryptionMeta['lastEncryptionDate'] !== $today) {
-        // Generate today's key
-        $todayKey = generateDailyKey($today);
-        
-        // If data was already encrypted, re-encrypt with today's key
-        if ($encryptionMeta['isEncrypted'] && !empty($encryptionMeta['lastEncryptionDate'])) {
-            // Get yesterday's key
-            $yesterday = date('Y-m-d', strtotime('-1 day'));
-            $yesterdayKey = generateDailyKey($yesterday);
-            
-            // Re-encrypt all data files
-            reEncryptDataFiles($yesterdayKey, $todayKey);
-        }
-        
-        // Update encryption metadata
-        $encryptionMeta['lastEncryptionDate'] = $today;
-        $encryptionMeta['isEncrypted'] = true;
-        saveEncryptionMeta($encryptionMeta);
-    }
-}
-
-// Re-encrypt all data files
-function reEncryptDataFiles($oldKey, $newKey) {
-    // List of data files to re-encrypt
-    $files = [USERS_FILE, CATEGORIES_FILE, POSTS_FILE, REPLIES_FILE, SEO_FILE];
-    
-    foreach ($files as $file) {
-        if (file_exists($file)) {
-            // Read encrypted data
-            $encryptedData = file_get_contents($file);
-            
-            // Decrypt with old key
-            $decryptedData = decryptData($encryptedData, $oldKey);
-            
-            // Re-encrypt with new key
-            $newEncryptedData = encryptData($decryptedData, $newKey);
-            
-            // Save re-encrypted data
-            file_put_contents($file, $newEncryptedData);
-        }
-    }
-}
-
-// Generate daily encryption key
-function generateDailyKey($dateString) {
-    $baseSecret = "S3cure#F0rum#System#2025";
-    $combinedString = $baseSecret . $dateString;
-    return hash('sha256', $combinedString);
-}
 
 // Encrypt data
 function encryptData($data, $key) {
@@ -822,6 +764,18 @@ function saveEncryptionMeta($metadata) {
     file_put_contents(ENCRYPTION_META_FILE, json_encode($metadata, JSON_PRETTY_PRINT));
 }
 
+// Get master encryption key
+function getMasterEncryptionKey() {
+    $encryptionMeta = loadEncryptionMeta();
+    
+    // If no master key exists, return null (data should be unencrypted)
+    if (!isset($encryptionMeta['masterKey'])) {
+        return null;
+    }
+    
+    return $encryptionMeta['masterKey'];
+}
+
 // Load data from JSON file
 function loadData($file) {
     if (!file_exists($file)) {
@@ -840,42 +794,34 @@ function loadData($file) {
         return $defaultData;
     }
     
-    // Get today's encryption key
-    $today = date('Y-m-d');
-    $encryptionKey = generateDailyKey($today);
-    
     // Read file contents
-    $encryptedData = file_get_contents($file);
+    $fileData = file_get_contents($file);
     
-    // Check if file is encrypted (starts with base64 encoded data)
-    if (base64_decode($encryptedData, true) !== false) {
+    // Get master encryption key
+    $masterKey = getMasterEncryptionKey();
+    
+    // If we have a master key, try to decrypt first
+    if ($masterKey && base64_decode($fileData, true) !== false) {
         try {
-            // Try to decrypt with today's key
-            $jsonData = decryptData($encryptedData, $encryptionKey);
-            $data = json_decode($jsonData, true);
-            
-            // If decoding failed, it might not be encrypted yet
-            if ($data === null) {
-                // Try to parse as plain JSON
-                $data = json_decode($encryptedData, true);
-                
-                // If still null, return empty array
-                if ($data === null) {
-                    return [];
-                }
+            $decryptedData = decryptData($fileData, $masterKey);
+            $data = json_decode($decryptedData, true);
+            if ($data !== null) {
+                return $data;
             }
-            
-            return $data;
         } catch (Exception $e) {
-            // Decryption failed, return empty array
-            error_log("Error decrypting file $file: " . $e->getMessage());
-            return [];
+            // Decryption failed, fall through to plain JSON parsing
+            error_log("Failed to decrypt $file: " . $e->getMessage());
         }
-    } else {
-        // Not encrypted, just parse as JSON
-        $data = json_decode($encryptedData, true);
-        return $data ?: [];
     }
+    
+    // Try to parse as plain JSON (unencrypted)
+    $data = json_decode($fileData, true);
+    if ($data !== null) {
+        return $data;
+    }
+    
+    // If both decryption and JSON parsing failed, return empty array
+    return [];
 }
 
 // Save data to JSON file
@@ -883,21 +829,15 @@ function saveData($file, $data) {
     // Convert data to JSON
     $jsonData = json_encode($data, JSON_PRETTY_PRINT);
     
-    // Get today's encryption key
-    $today = date('Y-m-d');
-    $encryptionKey = generateDailyKey($today);
+    // Get master encryption key
+    $masterKey = getMasterEncryptionKey();
     
-    // Check if encryption is needed
-    $encryptionMeta = loadEncryptionMeta();
-    
-    if ($encryptionMeta['isEncrypted']) {
-        // Encrypt the data
-        $encryptedData = encryptData($jsonData, $encryptionKey);
-        
-        // Save encrypted data
+    // If we have a master key, encrypt the data
+    if ($masterKey) {
+        $encryptedData = encryptData($jsonData, $masterKey);
         file_put_contents($file, $encryptedData);
     } else {
-        // Save as plain JSON for now
+        // No master key, save as plain JSON
         file_put_contents($file, $jsonData);
     }
 }

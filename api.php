@@ -1,5 +1,5 @@
 <?php
-// Secure Forum API with Daily Encryption and Individual Item Storage
+// Secure Forum API with Daily Encryption, Locking, and Timing Attack Protection
 // IMPORTANT: DO NOT ADD ANY WHITESPACE AFTER THE CLOSING PHP TAG
 
 // Disable error display for production
@@ -32,11 +32,12 @@ define('REPLIES_FILE', DATA_DIR . '/replies.json.enc');
 define('SEO_FILE', DATA_DIR . '/seo.json.enc');
 define('SESSION_KEYS_FILE', DATA_DIR . '/session_keys.json.enc');
 define('ENCRYPTION_META_FILE', DATA_DIR . '/encryption_meta.json');
-define('KEYS_FILE', DATA_DIR . '/server_keys.json.enc'); // Client-server public/private keys
+define('KEYS_FILE', DATA_DIR . '/server_keys.json.enc');
 
-// NEW: Backup and Recovery related constants
-define('BACKUP_BASE_DIR', DATA_DIR . '/backups');
-define('RECOVERY_KEY_FILE', DATA_DIR . '/recovery_key.json.enc'); // Stores the previous day's key, encrypted by current day's key
+// Locking and progress files
+define('LOCK_FILE', DATA_DIR . '/reencryption.lock');
+define('PROGRESS_FILE', DATA_DIR . '/reencryption_progress.json');
+define('QUEUE_FILE', DATA_DIR . '/operation_queue.json');
 
 // Individual item directories
 define('CATEGORIES_DIR', DATA_DIR . '/categories');
@@ -46,33 +47,21 @@ define('PLACARDS_DIR', DATA_DIR . '/placards');
 define('AVATARS_DIR', DATA_DIR . '/avatars');
 
 // Create data directories if they don't exist
-if (!file_exists(DATA_DIR)) {
-    mkdir(DATA_DIR, 0755, true);
+$directories = [DATA_DIR, CATEGORIES_DIR, POSTS_DIR, REPLIES_DIR, PLACARDS_DIR, AVATARS_DIR];
+foreach ($directories as $dir) {
+    if (!file_exists($dir)) {
+        mkdir($dir, 0755, true);
+    }
 }
-if (!file_exists(CATEGORIES_DIR)) {
-    mkdir(CATEGORIES_DIR, 0755, true);
-}
-if (!file_exists(POSTS_DIR)) {
-    mkdir(POSTS_DIR, 0755, true);
-}
-if (!file_exists(REPLIES_DIR)) {
-    mkdir(REPLIES_DIR, 0755, true);
-}
-if (!file_exists(PLACARDS_DIR)) {
-    mkdir(PLACARDS_DIR, 0755, true);
-}
-if (!file_exists(AVATARS_DIR)) {
-    mkdir(AVATARS_DIR, 0755, true);
-}
-if (!file_exists(BACKUP_BASE_DIR)) {
-    mkdir(BACKUP_BASE_DIR, 0755, true);
-}
-
-// Check if encryption needs to be updated for today
-checkDailyEncryption();
 
 // Get action from the request
 $action = isset($_GET["action"]) ? $_GET["action"] : "";
+
+// Check if system is locked for re-encryption (except for admin and status checks)
+if (isSystemLocked() && !in_array($action, ['get_encryption_status', 'daily_reencrypt', 'admin_status'])) {
+    respondWithMaintenanceMode();
+    exit;
+}
 
 // Wrap everything in a try-catch to prevent any errors from corrupting output
 try {
@@ -83,7 +72,7 @@ try {
             break;
             
         case "register":
-            register();
+            handleWithLocking('register');
             break;
             
         case "login":
@@ -99,11 +88,11 @@ try {
             break;
             
         case "create_category":
-            createCategory();
+            handleWithLocking('create_category');
             break;
             
         case "delete_category":
-            deleteCategory();
+            handleWithLocking('delete_category');
             break;
             
         case "verify_seo_password":
@@ -115,11 +104,11 @@ try {
             break;
             
         case "create_post":
-            createPost();
+            handleWithLocking('create_post');
             break;
             
         case "delete_post":
-            deletePost();
+            handleWithLocking('delete_post');
             break;
             
         case "get_post":
@@ -127,9 +116,10 @@ try {
             break;
             
         case "add_reply":
-            addReply();
+            handleWithLocking('add_reply');
             break;
-         case "federation_status":
+            
+        case "federation_status":
             getFederationStatusEndpoint();
             break;
 
@@ -144,8 +134,9 @@ try {
         case "import_file":
             importFileEndpoint();
             break;   
+            
         case "delete_reply":
-            deleteReply();
+            handleWithLocking('delete_reply');
             break;
             
         case "get_seo":
@@ -153,37 +144,44 @@ try {
             break;
             
         case "save_seo":
-            saveSeoSettings();
+            handleWithLocking('save_seo');
             break;
             
         case 'get_public_key':
             getServerPublicKey();
             break;
+            
         case "get_reply_counts":
             getReplyCountsEndpoint();
             break;
-    
+        
         case "get_encryption_status":
             getEncryptionStatus();
             break;
+            
+        case "daily_reencrypt":
+            $result = performDailyReencryption();
+            echo json_encode($result);
+            break;
+            
         case "get_avatar":
             getAvatar();
             break;
 
         case "upload_avatar":
-            uploadAvatar();
+            handleWithLocking('upload_avatar');
             break;
 
         case "update_placard_value":
-            updatePlacardValueEndpoint();
+            handleWithLocking('update_placard_value');
             break; 
+            
         case "get_user_placard":
             getUserPlacard();
             break;
-
-        // NEW: Admin recovery action
-        case "admin_recovery":
-            adminRecovery();
+            
+        case "get_system_status":
+            getSystemStatus();
             break;
             
         default:
@@ -200,51 +198,647 @@ try {
 ob_end_flush();
 exit;
 
-function getReplyCountsEndpoint() {
+// ==================== LOCKING AND SECURITY FUNCTIONS ====================
+
+function isSystemLocked() {
+    return file_exists(LOCK_FILE);
+}
+
+function respondWithMaintenanceMode() {
+    $maintenanceResponse = [
+        'success' => false,
+        'error' => 'System Maintenance',
+        'message' => 'The forum is currently undergoing daily re-encryption for security. Please try again in a few minutes.',
+        'maintenanceMode' => true,
+        'retryAfter' => 300 // 5 minutes
+    ];
+    
+    http_response_code(503); // Service Unavailable
+    header('Retry-After: 300');
+    echo json_encode($maintenanceResponse);
+}
+
+function createSystemLock() {
+    $lockData = [
+        'started' => time(),
+        'pid' => getmypid(),
+        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown',
+        'ip' => $_SERVER['REMOTE_ADDR'] ?? 'Unknown'
+    ];
+    
+    return file_put_contents(LOCK_FILE, json_encode($lockData)) !== false;
+}
+
+function removeSystemLock() {
+    if (file_exists(LOCK_FILE)) {
+        unlink(LOCK_FILE);
+    }
+    if (file_exists(PROGRESS_FILE)) {
+        unlink(PROGRESS_FILE);
+    }
+}
+
+function updateProgress($step, $current, $total, $message = '') {
+    $progress = [
+        'step' => $step,
+        'current' => $current,
+        'total' => $total,
+        'message' => $message,
+        'timestamp' => time(),
+        'percentage' => $total > 0 ? round(($current / $total) * 100, 1) : 0
+    ];
+    
+    file_put_contents(PROGRESS_FILE, json_encode($progress, JSON_PRETTY_PRINT));
+}
+
+function getFilesToReencrypt() {
+    $files = [];
+    
+    // Main forum files
+    $mainFiles = [
+        USERS_FILE,
+        CATEGORIES_FILE, 
+        POSTS_FILE,
+        REPLIES_FILE,
+        SEO_FILE,
+        SESSION_KEYS_FILE,
+        KEYS_FILE
+    ];
+    
+    foreach ($mainFiles as $file) {
+        if (file_exists($file)) {
+            $files[] = ['path' => $file, 'type' => 'file'];
+        }
+    }
+    
+    // Individual item directories
+    $directories = [CATEGORIES_DIR, POSTS_DIR, REPLIES_DIR, PLACARDS_DIR];
+    
+    foreach ($directories as $dir) {
+        if (is_dir($dir)) {
+            $dirFiles = glob($dir . '/*.json*');
+            foreach ($dirFiles as $file) {
+                $files[] = ['path' => $file, 'type' => 'file'];
+            }
+        }
+    }
+    
+    return $files;
+}
+
+// Clear all user sessions during re-encryption
+function clearAllUserSessions() {
     try {
+        // Clear session keys file - this will invalidate all active sessions
+        if (file_exists(SESSION_KEYS_FILE)) {
+            // Backup the session keys file
+            $backupFile = SESSION_KEYS_FILE . '.backup.' . date('Y-m-d-H-i-s');
+            copy(SESSION_KEYS_FILE, $backupFile);
+            
+            // Clear the session keys (invalidates all sessions)
+            saveData(SESSION_KEYS_FILE, []);
+            
+            // Log the session clearing
+            error_log("Cleared all user sessions during re-encryption");
+        }
+        
+        // If using file-based sessions, clear the session directory
+        $sessionPath = session_save_path();
+        if ($sessionPath && is_dir($sessionPath)) {
+            $sessionFiles = glob($sessionPath . '/sess_*');
+            foreach ($sessionFiles as $sessionFile) {
+                @unlink($sessionFile);
+            }
+        }
+        
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("Error clearing user sessions: " . $e->getMessage());
+        return false;
+    }
+}
+
+function queueOperation($operation, $data) {
+    $queue = [];
+    if (file_exists(QUEUE_FILE)) {
+        $queue = json_decode(file_get_contents(QUEUE_FILE), true) ?: [];
+    }
+    
+    $queue[] = [
+        'operation' => $operation,
+        'data' => $data,
+        'timestamp' => time(),
+        'user_id' => $data['userId'] ?? null
+    ];
+    
+    file_put_contents(QUEUE_FILE, json_encode($queue));
+}
+
+function processQueuedOperations() {
+    if (!file_exists(QUEUE_FILE)) {
+        return;
+    }
+    
+    $queue = json_decode(file_get_contents(QUEUE_FILE), true) ?: [];
+    $processed = 0;
+    $failed = 0;
+    
+    foreach ($queue as $item) {
+        try {
+            switch ($item['operation']) {
+                case 'create_post':
+                    $result = executeCreatePost($item['data']);
+                    if ($result) $processed++; else $failed++;
+                    break;
+                    
+                case 'add_reply':
+                    $result = executeAddReply($item['data']);
+                    if ($result) $processed++; else $failed++;
+                    break;
+                    
+                case 'create_category':
+                    $result = executeCreateCategory($item['data']);
+                    if ($result) $processed++; else $failed++;
+                    break;
+                    
+                default:
+                    $failed++;
+            }
+        } catch (Exception $e) {
+            error_log("Failed to process queued operation: " . $e->getMessage());
+            $failed++;
+        }
+    }
+    
+    // Clear the queue
+    unlink(QUEUE_FILE);
+    
+    error_log("Processed queued operations: $processed successful, $failed failed");
+}
+
+function handleWithLocking($operation) {
+    if (isSystemLocked()) {
+        // Get input data for queuing
         $input = file_get_contents("php://input");
         $data = json_decode($input, true);
         
-        if (!$data || !isset($data["postIds"]) || !isset($data["token"])) {
-            echo json_encode(["success" => false, "error" => "Missing required fields"]);
-            return;
+        // Add user ID if token exists
+        if (isset($data['token'])) {
+            $data['userId'] = verifyToken($data['token']);
         }
         
-        // Verify token
-        $userId = verifyToken($data["token"]);
-        if (!$userId) {
-            echo json_encode(["success" => false, "error" => "Invalid token"]);
-            return;
-        }
-        
-        $postIds = $data["postIds"];
-        if (!is_array($postIds)) {
-            $postIds = [$postIds]; // Convert single ID to array
-        }
-        
-        // Load replies
-        $repliesMetadata = loadData(REPLIES_FILE);
-        $counts = [];
-        
-        // Count replies for each post
-        foreach ($postIds as $postId) {
-            $count = 0;
-            foreach ($repliesMetadata as $reply) {
-                if (isset($reply["postId"]) && $reply["postId"] === $postId) {
-                    $count++;
-                }
-            }
-            $counts[$postId] = $count;
-        }
+        queueOperation($operation, $data);
         
         echo json_encode([
-            "success" => true,
-            "counts" => $counts
+            "success" => false, 
+            "error" => "System is currently performing maintenance. Your operation has been queued and will be processed shortly.",
+            "queued" => true,
+            "maintenance" => true
         ]);
-    } catch (Exception $e) {
-        echo json_encode(["success" => false, "error" => $e->getMessage()]);
+        return;
+    }
+    
+    // Execute the operation
+    switch ($operation) {
+        case 'register':
+            register();
+            break;
+        case 'create_category':
+            createCategory();
+            break;
+        case 'delete_category':
+            deleteCategory();
+            break;
+        case 'create_post':
+            createPost();
+            break;
+        case 'delete_post':
+            deletePost();
+            break;
+        case 'add_reply':
+            addReply();
+            break;
+        case 'delete_reply':
+            deleteReply();
+            break;
+        case 'save_seo':
+            saveSeoSettings();
+            break;
+        case 'upload_avatar':
+            uploadAvatar();
+            break;
+        case 'update_placard_value':
+            updatePlacardValueEndpoint();
+            break;
     }
 }
+
+function getSystemStatus() {
+    $status = [
+        'locked' => isSystemLocked(),
+        'progress' => getReencryptionProgress(),
+        'encryption_meta' => loadEncryptionMeta()
+    ];
+    
+    echo json_encode(['success' => true, 'status' => $status]);
+}
+
+function getReencryptionProgress() {
+    if (!file_exists(PROGRESS_FILE)) {
+        return null;
+    }
+    
+    $progress = json_decode(file_get_contents(PROGRESS_FILE), true);
+    return $progress;
+}
+
+// Daily re-encryption function (can be called via admin or cron)
+function performDailyReencryption() {
+    if (isSystemLocked()) {
+        return ['success' => false, 'error' => 'Re-encryption already in progress'];
+    }
+    
+    if (!createSystemLock()) {
+        return ['success' => false, 'error' => 'Failed to create system lock'];
+    }
+    
+    try {
+        $today = date('Y-m-d');
+        $yesterday = date('Y-m-d', strtotime('-1 day'));
+        
+        $oldKey = generateDailyKey($yesterday);
+        $newKey = generateDailyKey($today);
+        
+        // If keys are the same, no need to re-encrypt
+        if ($oldKey === $newKey) {
+            removeSystemLock();
+            return ['success' => true, 'message' => 'No re-encryption needed, keys unchanged'];
+        }
+        
+        updateProgress('starting', 0, 100, 'Starting daily re-encryption...');
+        
+        // Clear all user sessions before starting re-encryption
+        clearAllUserSessions();
+        
+        updateProgress('starting', 10, 100, 'Cleared all user sessions...');
+        
+        // Get files to process
+        $filesToProcess = getFilesToReencrypt();
+        $totalFiles = count($filesToProcess);
+        
+        $processed = 0;
+        $failed = 0;
+        
+        foreach ($filesToProcess as $file) {
+            $processed++;
+            
+            updateProgress('processing', $processed, $totalFiles, 
+                "Re-encrypting: " . basename($file['path']));
+            
+            if (dailyReencryptSingleFile($file['path'], $oldKey, $newKey)) {
+                // Success
+            } else {
+                $failed++;
+                error_log("Failed to re-encrypt: " . $file['path']);
+            }
+            
+            usleep(5000); // 5ms delay
+        }
+        
+        // Update metadata
+        $encryptionMeta = loadEncryptionMeta();
+        $encryptionMeta['lastEncryptionDate'] = $today;
+        $encryptionMeta['isEncrypted'] = true;
+        $encryptionMeta['lastReEncryption'] = date('c');
+        $encryptionMeta['filesProcessed'] = $processed;
+        $encryptionMeta['filesFailed'] = $failed;
+        $encryptionMeta['dailyReencryption'] = true;
+        
+        // Remove masterKey if it exists (we use daily keys now)
+        if (isset($encryptionMeta['masterKey'])) {
+            unset($encryptionMeta['masterKey']);
+        }
+        
+        saveEncryptionMeta($encryptionMeta);
+        
+        updateProgress('complete', $totalFiles, $totalFiles, 'Daily re-encryption completed!');
+        
+        sleep(1);
+        removeSystemLock();
+        
+        return ['success' => true, 'processed' => $processed, 'failed' => $failed];
+        
+    } catch (Exception $e) {
+        error_log("Daily re-encryption failed: " . $e->getMessage());
+        updateProgress('error', 0, 100, 'Daily re-encryption failed: ' . $e->getMessage());
+        removeSystemLock();
+        return ['success' => false, 'error' => $e->getMessage()];
+    }
+}
+
+// Re-encrypt a single file with daily keys
+function dailyReencryptSingleFile($file, $oldKey, $newKey) {
+    try {
+        if (!file_exists($file)) {
+            return true; // File doesn't exist, consider it successful
+        }
+        
+        $rawData = file_get_contents($file);
+        if ($rawData === false) {
+            return false;
+        }
+        
+        // Try to decrypt with the old key
+        $decryptedData = safeDecryptData($rawData, $oldKey);
+        
+        // If decryption failed, try with new key (might already be encrypted with today's key)
+        if (json_decode($decryptedData, true) === null && $decryptedData !== 'null') {
+            $decryptedData = safeDecryptData($rawData, $newKey);
+            
+            // If still failed, it might be plain JSON
+            if (json_decode($decryptedData, true) === null && $decryptedData !== 'null') {
+                // Check if raw data is valid JSON (unencrypted)
+                if (json_decode($rawData, true) !== null || $rawData === 'null') {
+                    $decryptedData = $rawData;
+                } else {
+                    return false; // Cannot decrypt or parse
+                }
+            }
+        }
+        
+        // Re-encrypt with new key
+        $encryptedData = encryptData($decryptedData, $newKey);
+        
+        // Create backup
+        $backupFile = $file . '.backup.' . date('Y-m-d-H-i-s');
+        copy($file, $backupFile);
+        
+        // Save re-encrypted data
+        $result = file_put_contents($file, $encryptedData);
+        
+        if ($result !== false) {
+            // Remove backup on success
+            unlink($backupFile);
+            return true;
+        }
+        
+        return false;
+        
+    } catch (Exception $e) {
+        error_log("Error re-encrypting file $file: " . $e->getMessage());
+        return false;
+    }
+}
+
+// ==================== ENCRYPTION FUNCTIONS ====================
+
+function generateDailyKey($dateString) {
+    $baseSecret = "S3cure#F0rum#System#2025";
+    $combinedString = $baseSecret . $dateString;
+    return hash('sha256', $combinedString);
+}
+
+function encryptData($data, $key) {
+    // Create encryption key from password
+    $encKey = substr(hash('sha256', $key, true), 0, 32);
+    
+    // Create a random IV
+    $iv = openssl_random_pseudo_bytes(16);
+    
+    // Encrypt
+    $encrypted = openssl_encrypt($data, 'AES-256-CBC', $encKey, 0, $iv);
+    
+    // Combine IV and encrypted data
+    $result = base64_encode($iv . $encrypted);
+    
+    return $result;
+}
+
+function safeDecryptData($encryptedData, $key) {
+    try {
+        // Create decryption key from password
+        $decKey = substr(hash('sha256', $key, true), 0, 32);
+        
+        // Check if data looks encrypted
+        if (!isEncryptedData($encryptedData)) {
+            return $encryptedData;
+        }
+        
+        // Decode from base64
+        $data = base64_decode($encryptedData);
+        
+        if ($data === false || strlen($data) < 16) {
+            return $encryptedData;
+        }
+        
+        // Extract IV (first 16 bytes)
+        $iv = substr($data, 0, 16);
+        
+        // Extract the encrypted data (everything after IV)
+        $encrypted = substr($data, 16);
+        
+        // Decrypt
+        $decrypted = openssl_decrypt($encrypted, 'AES-256-CBC', $decKey, 0, $iv);
+        
+        if ($decrypted === false) {
+            return $encryptedData;
+        }
+        
+        return $decrypted;
+        
+    } catch (Exception $e) {
+        error_log("Decryption error: " . $e->getMessage());
+        return $encryptedData;
+    }
+}
+
+function isEncryptedData($data) {
+    // Check if it's valid base64
+    if (base64_decode($data, true) === false) {
+        return false;
+    }
+    
+    // Check if it looks like JSON (encrypted data shouldn't look like JSON)
+    $trimmed = trim($data);
+    if (($trimmed[0] === '{' && substr($trimmed, -1) === '}') || 
+        ($trimmed[0] === '[' && substr($trimmed, -1) === ']')) {
+        return false;
+    }
+    
+    // Check length - encrypted data with IV should be longer
+    $decoded = base64_decode($data);
+    if (strlen($decoded) < 32) { // IV (16) + some encrypted content
+        return false;
+    }
+    
+    return true;
+}
+
+function loadEncryptionMeta() {
+    if (file_exists(ENCRYPTION_META_FILE)) {
+        $data = file_get_contents(ENCRYPTION_META_FILE);
+        $meta = json_decode($data, true);
+        
+        if (is_array($meta)) {
+            // Ensure all required fields exist
+            $defaults = [
+                'lastEncryptionDate' => '',
+                'isEncrypted' => false,
+                'initialized' => '',
+                'lastReEncryption' => '',
+                'version' => '1.0'
+            ];
+            
+            return array_merge($defaults, $meta);
+        }
+    }
+    
+    // Default encryption metadata
+    return [
+        'lastEncryptionDate' => '',
+        'isEncrypted' => false,
+        'initialized' => '',
+        'lastReEncryption' => '',
+        'version' => '1.0'
+    ];
+}
+
+function saveEncryptionMeta($metadata) {
+    try {
+        $metadata['lastUpdate'] = date('c');
+        $result = file_put_contents(ENCRYPTION_META_FILE, json_encode($metadata, JSON_PRETTY_PRINT));
+        return $result !== false;
+    } catch (Exception $e) {
+        error_log("Error saving encryption metadata: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Try to decrypt data with daily keys (today, yesterday, and day before)
+function tryDecryptWithDailyKeys($rawData) {
+    $today = date('Y-m-d');
+    
+    // Try today's key first
+    $todayKey = generateDailyKey($today);
+    $jsonData = safeDecryptData($rawData, $todayKey);
+    
+    // Check if decryption worked
+    if (json_decode($jsonData, true) !== null || $jsonData === 'null') {
+        return $jsonData;
+    }
+    
+    // Try yesterday's key
+    $yesterday = date('Y-m-d', strtotime('-1 day'));
+    $yesterdayKey = generateDailyKey($yesterday);
+    $jsonData = safeDecryptData($rawData, $yesterdayKey);
+    
+    if (json_decode($jsonData, true) !== null || $jsonData === 'null') {
+        return $jsonData;
+    }
+    
+    // Try day before yesterday's key
+    $dayBefore = date('Y-m-d', strtotime('-2 days'));
+    $dayBeforeKey = generateDailyKey($dayBefore);
+    $jsonData = safeDecryptData($rawData, $dayBeforeKey);
+    
+    if (json_decode($jsonData, true) !== null || $jsonData === 'null') {
+        return $jsonData;
+    }
+    
+    // If none worked, return original data (might be plain JSON)
+    return $rawData;
+}
+
+function loadData($file) {
+    if (!file_exists($file)) {
+        // Create empty file with default structure
+        $defaultData = [];
+        
+        if ($file === SEO_FILE) {
+            $defaultData = [
+                'title' => 'Secure Forum System',
+                'description' => 'A secure forum system with encryption and many features',
+                'keywords' => 'forum,security,encryption'
+            ];
+        }
+        
+        saveData($file, $defaultData);
+        return $defaultData;
+    }
+    
+    try {
+        // Read file contents
+        $rawData = file_get_contents($file);
+        if ($rawData === false) {
+            error_log("Failed to read file: $file");
+            return [];
+        }
+        
+        // Try multiple keys for decryption (daily keys with fallback)
+        $jsonData = tryDecryptWithDailyKeys($rawData);
+        
+        // Parse JSON
+        $data = json_decode($jsonData, true);
+        
+        if ($data === null && $jsonData !== 'null') {
+            error_log("Failed to parse JSON from file: $file");
+            return [];
+        }
+        
+        return $data ?: [];
+        
+    } catch (Exception $e) {
+        error_log("Error loading data from $file: " . $e->getMessage());
+        return [];
+    }
+}
+
+function saveData($file, $data) {
+    try {
+        // Create directory if needed
+        $dir = dirname($file);
+        if (!file_exists($dir)) {
+            if (!mkdir($dir, 0755, true)) {
+                throw new Exception("Failed to create directory: $dir");
+            }
+        }
+        
+        // Convert data to JSON
+        $jsonData = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        if ($jsonData === false) {
+            throw new Exception("Failed to encode data to JSON");
+        }
+        
+        // Get today's encryption key
+        $today = date('Y-m-d');
+        $encryptionKey = generateDailyKey($today);
+        
+        // Check if encryption is enabled
+        $encryptionMeta = loadEncryptionMeta();
+        
+        if ($encryptionMeta['isEncrypted']) {
+            // Encrypt the data
+            $encryptedData = encryptData($jsonData, $encryptionKey);
+            $result = file_put_contents($file, $encryptedData);
+        } else {
+            // Save as plain JSON
+            $result = file_put_contents($file, $jsonData);
+        }
+        
+        if ($result === false) {
+            throw new Exception("Failed to write to file: $file");
+        }
+        
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("Error saving data to $file: " . $e->getMessage());
+        return false;
+    }
+}
+
+// ==================== API ENDPOINT FUNCTIONS ====================
 
 function checkAdminExists() {
     $users = loadData(USERS_FILE);
@@ -260,93 +854,6 @@ function checkAdminExists() {
     echo json_encode(["success" => true, "admin_exists" => $adminExists]);
 }
 
-function verifySeoPasswordEndpoint() {
-    $input = file_get_contents("php://input");
-    $data = json_decode($input, true);
-    
-    if (!$data || !isset($data["password"])) {
-        echo json_encode(["success" => false, "error" => "Missing password"]);
-        return;
-    }
-    
-    $isValid = verifySeoPassword($data["password"]);
-    
-    echo json_encode([
-        "success" => true,
-        "valid" => $isValid
-    ]);
-}
-function getFederationStatusEndpoint() {
-    $input = file_get_contents("php://input");
-    $data = json_decode($input, true);
-    
-    if (!$data || !isset($data["token"])) {
-        echo json_encode(["success" => false, "error" => "Missing token"]);
-        return;
-    }
-    
-    $result = getFederationStatus($data["token"]);
-    echo json_encode($result);
-}
-
-function connectServerEndpoint() {
-    $input = file_get_contents("php://input");
-    $data = json_decode($input, true);
-    
-    if (!$data || !isset($data["token"]) || !isset($data["serverUrl"]) ||
-        !isset($data["serverId"]) || !isset($data["initialKey"])) {
-        echo json_encode(["success" => false, "error" => "Missing required fields"]);
-        return;
-    }
-    
-    $result = initiateServerConnection(
-        $data["serverUrl"],
-        $data["serverId"],
-        $data["initialKey"],
-        $data["token"]
-    );
-    
-    echo json_encode($result);
-}
-
-function shareFileEndpoint() {
-    $input = file_get_contents("php://input");
-    $data = json_decode($input, true);
-    
-    if (!$data || !isset($data["token"]) || !isset($data["filePath"]) ||
-        !isset($data["targetServerId"]) || !isset($data["fileType"])) {
-        echo json_encode(["success" => false, "error" => "Missing required fields"]);
-        return;
-    }
-    
-    $result = shareFile(
-        $data["filePath"],
-        $data["targetServerId"],
-        $data["fileType"],
-        $data["token"]
-    );
-    
-    echo json_encode($result);
-}
-
-function importFileEndpoint() {
-    $input = file_get_contents("php://input");
-    $data = json_decode($input, true);
-    
-    if (!$data || !isset($data["token"]) || !isset($data["fileName"])) {
-        echo json_encode(["success" => false, "error" => "Missing required fields"]);
-        return;
-    }
-    
-    // Implementation for importing a shared file
-    // This would decrypt the file and store it in the appropriate location
-    
-    echo json_encode([
-        "success" => true,
-        "message" => "File imported successfully"
-    ]);
-}
-// Register function
 function register() {
     // Get input data
     $input = file_get_contents("php://input");
@@ -443,6 +950,82 @@ function register() {
         "user" => $userResponse,
         "token" => $token
     ]);
+}
+
+function executeCreatePost($data = null) {
+    if ($data === null) {
+        $input = file_get_contents("php://input");
+        $data = json_decode($input, true);
+    }
+    
+    if (!$data) {
+        return false;
+    }
+    
+    if (!isset($data["title"]) || !isset($data["content"]) || 
+        !isset($data["categoryId"]) || !isset($data["token"])) {
+        return false;
+    }
+    
+    $userId = verifyToken($data["token"]);
+    if (!$userId) {
+        return false;
+    }
+    
+    // Get user data
+    $users = loadData(USERS_FILE);
+    $author = null;
+    
+    foreach ($users as $user) {
+        if ($user["id"] === $userId) {
+            $author = $user;
+            break;
+        }
+    }
+    
+    if (!$author) {
+        return false;
+    }
+    
+    $postId = bin2hex(random_bytes(8));
+    $newPost = [
+        "id" => $postId,
+        "title" => $data["title"],
+        "content" => $data["content"],
+        "categoryId" => $data["categoryId"],
+        "author" => $author["username"],
+        "authorId" => $author["id"],
+        "created" => date("c"),
+        "lastActivity" => date("c")
+    ];
+    
+    // Save post to individual file
+    $postFile = POSTS_DIR . '/' . $postId . '.json.enc';
+    saveData($postFile, $newPost);
+    
+    // Update posts metadata
+    $postsMetadata = loadData(POSTS_FILE);
+    $postsMetadata[] = [
+        "id" => $postId,
+        "title" => $data["title"],
+        "categoryId" => $data["categoryId"],
+        "authorId" => $author["id"],
+        "created" => date("c"),
+        "lastActivity" => date("c")
+    ];
+    saveData(POSTS_FILE, $postsMetadata);
+    
+    return true;
+}
+
+function createPost() {
+    $result = executeCreatePost();
+    
+    if ($result) {
+        echo json_encode(["success" => true]);
+    } else {
+        echo json_encode(["success" => false, "error" => "Failed to create post"]);
+    }
 }
 
 // Login function
@@ -563,26 +1146,25 @@ function getCategories() {
 }
 
 // Create category
-function createCategory() {
-    $input = file_get_contents("php://input");
-    $data = json_decode($input, true);
+function executeCreateCategory($data = null) {
+    if ($data === null) {
+        $input = file_get_contents("php://input");
+        $data = json_decode($input, true);
+    }
     
     if (!$data || !isset($data["name"]) || !isset($data["description"]) || !isset($data["token"])) {
-        echo json_encode(["success" => false, "error" => "Missing required fields"]);
-        return;
+        return false;
     }
     
     $userId = verifyToken($data["token"]);
     if (!$userId) {
-        echo json_encode(["success" => false, "error" => "Invalid token"]);
-        return;
+        return false;
     }
     
     // Check if user is admin
     $isAdmin = isUserAdmin($userId);
     if (!$isAdmin) {
-        echo json_encode(["success" => false, "error" => "Permission denied"]);
-        return;
+        return false;
     }
     
     // Create category
@@ -608,7 +1190,17 @@ function createCategory() {
     ];
     saveData(CATEGORIES_FILE, $categoriesMetadata);
     
-    echo json_encode(["success" => true, "category" => $newCategory]);
+    return true;
+}
+
+function createCategory() {
+    $result = executeCreateCategory();
+    
+    if ($result) {
+        echo json_encode(["success" => true]);
+    } else {
+        echo json_encode(["success" => false, "error" => "Failed to create category"]);
+    }
 }
 
 // Delete category
@@ -714,75 +1306,6 @@ function getPosts() {
     }
     
     echo json_encode(["success" => true, "posts" => $posts]);
-}
-
-// Create post function
-function createPost() {
-    $input = file_get_contents("php://input");
-    $data = json_decode($input, true);
-    
-    if (!$data) {
-        echo json_encode(["success" => false, "error" => "Invalid request data"]);
-        return;
-    }
-    
-    if (!isset($data["title"]) || !isset($data["content"]) || 
-        !isset($data["categoryId"]) || !isset($data["token"])) {
-        echo json_encode(["success" => false, "error" => "Missing required fields"]);
-        return;
-    }
-    
-    $userId = verifyToken($data["token"]);
-    if (!$userId) {
-        echo json_encode(["success" => false, "error" => "Invalid token"]);
-        return;
-    }
-    
-    // Get user data
-    $users = loadData(USERS_FILE);
-    $author = null;
-    
-    foreach ($users as $user) {
-        if ($user["id"] === $userId) {
-            $author = $user;
-            break;
-        }
-    }
-    
-    if (!$author) {
-        echo json_encode(["success" => false, "error" => "User not found"]);
-        return;
-    }
-    
-    $postId = bin2hex(random_bytes(8));
-    $newPost = [
-        "id" => $postId,
-        "title" => $data["title"],
-        "content" => $data["content"],
-        "categoryId" => $data["categoryId"],
-        "author" => $author["username"],
-        "authorId" => $author["id"],
-        "created" => date("c"),
-        "lastActivity" => date("c")
-    ];
-    
-    // Save post to individual file
-    $postFile = POSTS_DIR . '/' . $postId . '.json.enc';
-    saveData($postFile, $newPost);
-    
-    // Update posts metadata
-    $postsMetadata = loadData(POSTS_FILE);
-    $postsMetadata[] = [
-        "id" => $postId,
-        "title" => $data["title"],
-        "categoryId" => $data["categoryId"],
-        "authorId" => $author["id"],
-        "created" => date("c"),
-        "lastActivity" => date("c")
-    ];
-    saveData(POSTS_FILE, $postsMetadata);
-    
-    echo json_encode(["success" => true, "post" => $newPost]);
 }
 
 // Delete post function
@@ -920,19 +1443,19 @@ function getPost() {
 }
 
 // Add reply function
-function addReply() {
-    $input = file_get_contents("php://input");
-    $data = json_decode($input, true);
+function executeAddReply($data = null) {
+    if ($data === null) {
+        $input = file_get_contents("php://input");
+        $data = json_decode($input, true);
+    }
     
     if (!$data || !isset($data["postId"]) || !isset($data["content"]) || !isset($data["token"])) {
-        echo json_encode(["success" => false, "error" => "Missing required fields"]);
-        return;
+        return false;
     }
     
     $userId = verifyToken($data["token"]);
     if (!$userId) {
-        echo json_encode(["success" => false, "error" => "Invalid token"]);
-        return;
+        return false;
     }
     
     // Get user data
@@ -947,8 +1470,7 @@ function addReply() {
     }
     
     if (!$author) {
-        echo json_encode(["success" => false, "error" => "User not found"]);
-        return;
+        return false;
     }
     
     // Check if post exists
@@ -956,8 +1478,7 @@ function addReply() {
     $postFile = POSTS_DIR . '/' . $postId . '.json.enc';
     
     if (!file_exists($postFile)) {
-        echo json_encode(["success" => false, "error" => "Post not found"]);
-        return;
+        return false;
     }
     
     // Update last activity on post
@@ -999,7 +1520,17 @@ function addReply() {
     ];
     saveData(REPLIES_FILE, $repliesMetadata);
     
-    echo json_encode(["success" => true, "reply" => $newReply]);
+    return true;
+}
+
+function addReply() {
+    $result = executeAddReply();
+    
+    if ($result) {
+        echo json_encode(["success" => true]);
+    } else {
+        echo json_encode(["success" => false, "error" => "Failed to add reply"]);
+    }
 }
 
 // Delete reply function
@@ -1092,6 +1623,23 @@ function saveSeoSettings() {
     echo json_encode(["success" => true, "seo" => $seoData]);
 }
 
+function verifySeoPasswordEndpoint() {
+    $input = file_get_contents("php://input");
+    $data = json_decode($input, true);
+    
+    if (!$data || !isset($data["password"])) {
+        echo json_encode(["success" => false, "error" => "Missing password"]);
+        return;
+    }
+    
+    $isValid = verifySeoPassword($data["password"]);
+    
+    echo json_encode([
+        "success" => true,
+        "valid" => $isValid
+    ]);
+}
+
 // Get or generate server's public key
 function getServerPublicKey() {
     try {
@@ -1152,476 +1700,12 @@ function getEncryptionStatus() {
     ]);
 }
 
-/**
- * NEW: Function to recursively copy a directory.
- * Used for creating full site backups.
- */
-function copyDirectory($source, $destination) {
-    if (!is_dir($source)) {
-        return false;
-    }
-
-    if (!is_dir($destination)) {
-        mkdir($destination, 0755, true);
-    }
-
-    $dir = opendir($source);
-    if ($dir === false) {
-        return false;
-    }
-
-    while (false !== ($file = readdir($dir))) {
-        if (($file != '.') && ($file != '..')) {
-            if (is_dir($source . '/' . $file)) {
-                copyDirectory($source . '/' . $file, $destination . '/' . $file);
-            } else {
-                copy($source . '/' . $file, $destination . '/' . $file);
-            }
-        }
-    }
-    closedir($dir);
-    return true;
-}
-
-/**
- * NEW: Function to backup the entire data directory.
- */
-function backupSiteData() {
-    $timestamp = date('Ymd_His');
-    $backupPath = BACKUP_BASE_DIR . '/' . $timestamp;
-
-    // Ensure backup base directory exists
-    if (!file_exists(BACKUP_BASE_DIR)) {
-        mkdir(BACKUP_BASE_DIR, 0755, true);
-    }
-    
-    // Create the timestamped backup directory
-    if (!mkdir($backupPath, 0755, true)) {
-        error_log("Failed to create backup directory: {$backupPath}");
-        return false;
-    }
-
-    // Copy the entire DATA_DIR to the backup path
-    $success = copyDirectory(DATA_DIR, $backupPath);
-    
-    if (!$success) {
-        error_log("Failed to copy data directory to backup: {$backupPath}");
-    } else {
-        error_log("Site data backed up to: {$backupPath}");
-    }
-    return $success;
-}
-
-/**
- * NEW: Function to re-encrypt the previous day's daily key with the new daily key.
- * This is crucial for recovery.
- */
-function reEncryptRecoveryKey($oldDailyKey, $newDailyKey) {
-    // Store the old daily key, encrypted by the new daily key
-    // This allows an admin to use the base secret to get the current daily key,
-    // then use that to decrypt this file to get the previous daily key, and so on.
-    
-    $keyToStore = $oldDailyKey; // The key we want to be able to recover
-    
-    // Encrypt the old daily key with the new daily key
-    $encryptedKey = encryptData($keyToStore, $newDailyKey);
-    
-    // Save it to a dedicated file
-    file_put_contents(RECOVERY_KEY_FILE, $encryptedKey);
-    error_log("Recovery key updated and re-encrypted.");
-}
-
-
-// Check if encryption needs to be updated for today
-function checkDailyEncryption() {
-    $today = date('Y-m-d');
-    $encryptionMeta = loadEncryptionMeta();
-    
-    // Check if re-encryption is needed
-    if ($encryptionMeta['lastEncryptionDate'] !== $today) {
-        error_log("Daily encryption pass initiated for {$today}.");
-
-        // Generate today's key
-        $todayKey = generateDailyKey($today);
-        
-        // Determine the key that was used yesterday
-        $yesterday = date('Y-m-d', strtotime('-1 day'));
-        $yesterdayKey = generateDailyKey($yesterday); // This is the key that was used to encrypt data yesterday
-
-        // NEW: 1. Backup the entire site data BEFORE re-encryption
-        error_log("Starting site data backup...");
-        backupSiteData();
-        error_log("Site data backup complete.");
-
-        // NEW: 2. Re-encrypt the previous day's daily key with the new daily key
-        // This allows for a chain of recovery keys.
-        error_log("Re-encrypting recovery key...");
-        reEncryptRecoveryKey($yesterdayKey, $todayKey); // Store yesterday's key, encrypted by today's key
-        error_log("Recovery key re-encrypted.");
-
-        // If data was already encrypted, re-encrypt with today's key
-        if ($encryptionMeta['isEncrypted'] && !empty($encryptionMeta['lastEncryptionDate'])) {
-            error_log("Re-encrypting all data files with new daily key...");
-            reEncryptDataFiles($yesterdayKey, $todayKey); // Decrypt with yesterday's key, encrypt with today's key
-            error_log("All data files re-encrypted.");
-        } else {
-            // This is the first time encryption is being applied or after a full decryption
-            error_log("Initial encryption or re-encryption after recovery: Encrypting all data files with today's key...");
-            // If data is currently unencrypted, encrypt it with today's key
-            encryptAllDataFiles($todayKey);
-            error_log("All data files initially encrypted.");
-        }
-        
-        // Update encryption metadata
-        $encryptionMeta['lastEncryptionDate'] = $today;
-        $encryptionMeta['isEncrypted'] = true;
-        saveEncryptionMeta($encryptionMeta);
-        error_log("Encryption metadata updated.");
-    }
-}
-
-/**
- * NEW: Function to encrypt all data files from their unencrypted state using a given key.
- * This is used during initial encryption or after an admin recovery.
- */
-function encryptAllDataFiles($encryptionKey) {
-    $files = [USERS_FILE, CATEGORIES_FILE, POSTS_FILE, REPLIES_FILE, SEO_FILE, KEYS_FILE];
-    
-    foreach ($files as $file) {
-        if (file_exists($file)) {
-            $jsonData = file_get_contents($file); // Assume it's plain JSON
-            $encryptedData = encryptData($jsonData, $encryptionKey);
-            file_put_contents($file, $encryptedData);
-        }
-    }
-
-    // Encrypt individual category files
-    encryptDirectoryFiles(CATEGORIES_DIR, $encryptionKey);
-    
-    // Encrypt individual post files
-    encryptDirectoryFiles(POSTS_DIR, $encryptionKey);
-    
-    // Encrypt individual reply files
-    encryptDirectoryFiles(REPLIES_DIR, $encryptionKey);
-    
-    // Encrypt individual placard files
-    encryptDirectoryFiles(PLACARDS_DIR, $encryptionKey);
-}
-
-/**
- * NEW: Helper to encrypt all .json files in a directory.
- */
-function encryptDirectoryFiles($directory, $encryptionKey) {
-    if (!is_dir($directory)) {
-        return;
-    }
-    
-    $files = glob($directory . '/*.json'); // Look for unencrypted .json files
-    
-    foreach ($files as $file) {
-        if (file_exists($file)) {
-            $jsonData = file_get_contents($file);
-            $encryptedData = encryptData($jsonData, $encryptionKey);
-            
-            // Rename the file to .json.enc
-            $newFileName = $file . '.enc';
-            file_put_contents($newFileName, $encryptedData);
-            unlink($file); // Delete the original unencrypted file
-        }
-    }
-}
-
-
-// Re-encrypt all data files
-function reEncryptDataFiles($oldKey, $newKey) {
-    // List of main data files to re-encrypt
-    $files = [USERS_FILE, CATEGORIES_FILE, POSTS_FILE, REPLIES_FILE, SEO_FILE, KEYS_FILE];
-    
-    foreach ($files as $file) {
-        if (file_exists($file)) {
-            // Read encrypted data
-            $encryptedData = file_get_contents($file);
-            
-            // Decrypt with old key
-            $decryptedData = decryptData($encryptedData, $oldKey);
-            
-            // Re-encrypt with new key
-            $newEncryptedData = encryptData($decryptedData, $newKey);
-            
-            // Save re-encrypted data
-            file_put_contents($file, $newEncryptedData);
-        }
-    }
-    
-    // Re-encrypt individual category files
-    reEncryptDirectoryFiles(CATEGORIES_DIR, $oldKey, $newKey);
-    
-    // Re-encrypt individual post files
-    reEncryptDirectoryFiles(POSTS_DIR, $oldKey, $newKey);
-    
-    // Re-encrypt individual reply files
-    reEncryptDirectoryFiles(REPLIES_DIR, $oldKey, $newKey);
-    
-    // Re-encrypt individual placard files
-    reEncryptDirectoryFiles(PLACARDS_DIR, $oldKey, $newKey);
-}
-
-// Re-encrypt all files in a directory
-function reEncryptDirectoryFiles($directory, $oldKey, $newKey) {
-    if (!is_dir($directory)) {
-        return;
-    }
-    
-    $files = glob($directory . '/*.json.enc');
-    
-    foreach ($files as $file) {
-        if (file_exists($file)) {
-            // Read encrypted data
-            $encryptedData = file_get_contents($file);
-            
-            // Decrypt with old key
-            $decryptedData = decryptData($encryptedData, $oldKey);
-            
-            // Re-encrypt with new key
-            $newEncryptedData = encryptData($decryptedData, $newKey);
-            
-            // Save re-encrypted data
-            file_put_contents($file, $newEncryptedData);
-        }
-    }
-}
-
-// Generate daily encryption key
-function generateDailyKey($dateString) {
-    // This base secret is crucial for recovery. Keep it secure!
-    $baseSecret = "S3cure#F0rum#System#2025"; 
-    $combinedString = $baseSecret . $dateString;
-    return hash('sha256', $combinedString);
-}
-
-// Encrypt data
-function encryptData($data, $key) {
-    // Create encryption key from password
-    $encKey = substr(hash('sha256', $key, true), 0, 32);
-    
-    // Create a random IV
-    $iv = openssl_random_pseudo_bytes(16);
-    
-    // Encrypt
-    $encrypted = openssl_encrypt($data, 'AES-256-CBC', $encKey, 0, $iv);
-    
-    // Combine IV and encrypted data
-    $result = base64_encode($iv . $encrypted);
-    
-    return $result;
-}
-
-// Decrypt data
-function decryptData($encryptedData, $key) {
-    try {
-        // Create decryption key from password
-        $decKey = substr(hash('sha256', $key, true), 0, 32);
-        
-        // Decode from base64
-        $data = base64_decode($encryptedData);
-        
-        if ($data === false) {
-            // Not base64 encoded or invalid, return original data
-            return $encryptedData;
-        }
-        
-        // Extract IV (first 16 bytes)
-        $iv = substr($data, 0, 16);
-        
-        // Extract the encrypted data (everything after IV)
-        $encrypted = substr($data, 16);
-        
-        // Decrypt
-        $decrypted = openssl_decrypt($encrypted, 'AES-256-CBC', $decKey, 0, $iv);
-        
-        if ($decrypted === false) {
-            // Failed to decrypt, return original (might be unencrypted or corrupted)
-            return $encryptedData;
-        }
-        
-        return $decrypted;
-    } catch (Exception $e) {
-        // On error, return original data
-        error_log("Decryption error: " . $e->getMessage());
-        return $encryptedData;
-    }
-}
-
-// Load encryption metadata
-function loadEncryptionMeta() {
-    if (file_exists(ENCRYPTION_META_FILE)) {
-        $data = file_get_contents(ENCRYPTION_META_FILE);
-        $meta = json_decode($data, true);
-        
-        if (is_array($meta) && isset($meta['lastEncryptionDate']) && isset($meta['isEncrypted'])) {
-            return $meta;
-        }
-    }
-    
-    // Default encryption metadata
-    return [
-        'lastEncryptionDate' => '',
-        'isEncrypted' => false
-    ];
-}
-
-// Save encryption metadata
-function saveEncryptionMeta($metadata) {
-    file_put_contents(ENCRYPTION_META_FILE, json_encode($metadata, JSON_PRETTY_PRINT));
-}
-
-// Load data from JSON file
-function loadData($file) {
-    if (!file_exists($file)) {
-        // Create empty file with default structure
-        $defaultData = [];
-        
-        if ($file === SEO_FILE) {
-            $defaultData = [
-                'title' => 'Secure Forum System',
-                'description' => 'A secure forum system with encryption and many features',
-                'keywords' => 'forum,security,encryption'
-            ];
-        } elseif ($file === CATEGORIES_FILE || $file === POSTS_FILE || $file === REPLIES_FILE || strpos($file, '.json.enc') !== false) {
-            $defaultData = [];
-        }
-        
-        // If it's a new file that should be encrypted, save it as encrypted empty array
-        $encryptionMeta = loadEncryptionMeta();
-        if ($encryptionMeta['isEncrypted'] && strpos($file, '.json.enc') !== false) {
-             $today = date('Y-m-d');
-             $encryptionKey = generateDailyKey($today);
-             file_put_contents($file, encryptData(json_encode($defaultData, JSON_PRETTY_PRINT), $encryptionKey));
-        } else {
-            file_put_contents($file, json_encode($defaultData, JSON_PRETTY_PRINT));
-        }
-       
-        return $defaultData;
-    }
-    
-    // Get today's encryption key
-    $today = date('Y-m-d');
-    $encryptionKey = generateDailyKey($today);
-    
-    // Read file contents
-    $encryptedData = file_get_contents($file);
-    
-    // Check if file is encrypted (starts with base64 encoded data)
-    // We assume .json.enc files are encrypted. If they aren't, try to decrypt anyway.
-    if (strpos($file, '.json.enc') !== false) {
-        try {
-            $jsonData = decryptData($encryptedData, $encryptionKey);
-            $data = json_decode($jsonData, true);
-            
-            // If decoding failed, it might be unencrypted or corrupted.
-            // Attempt to parse as plain JSON as a fallback.
-            if ($data === null) {
-                $data = json_decode($encryptedData, true);
-                if ($data !== null) {
-                    error_log("Warning: Encrypted file {$file} was found to be unencrypted. Decrypting as plain JSON.");
-                }
-            }
-            
-            return $data ?: [];
-        } catch (Exception $e) {
-            error_log("Error decrypting file {$file}: " . $e->getMessage());
-            return [];
-        }
-    } else {
-        // Not an encrypted file extension, just parse as JSON
-        $data = json_decode($encryptedData, true);
-        return $data ?: [];
-    }
-}
-
-// Save data to JSON file
-function saveData($file, $data) {
-    // Create directory if needed
-    $dir = dirname($file);
-    if (!file_exists($dir)) {
-        mkdir($dir, 0755, true);
-    }
-    
-    // Convert data to JSON
-    $jsonData = json_encode($data, JSON_PRETTY_PRINT);
-    
-    // Get today's encryption key
-    $today = date('Y-m-d');
-    $encryptionKey = generateDailyKey($today);
-    
-    // Check if encryption is needed based on file extension and global encryption status
-    $encryptionMeta = loadEncryptionMeta();
-    
-    if ($encryptionMeta['isEncrypted'] && strpos($file, '.json.enc') !== false) {
-        // Encrypt the data
-        $encryptedData = encryptData($jsonData, $encryptionKey);
-        
-        // Save encrypted data
-        file_put_contents($file, $encryptedData);
-    } else {
-        // Save as plain JSON (e.g., for encryption_meta.json or if not yet encrypted)
-        file_put_contents($file, $jsonData);
-    }
-}
-
-// Check if user is admin
-function isUserAdmin($userId) {
-    $users = loadData(USERS_FILE);
-    
-    foreach ($users as $user) {
-        if ($user["id"] === $userId && isset($user["role"]) && $user["role"] === "admin") {
-            return true;
-        }
-    }
-    
-    return false;
-}
-
-// Generate token
-function generateToken($userId) {
-    $tokenData = [
-        'userId' => $userId,
-        'exp' => time() + (86400 * 7), // 7 days
-        'iat' => time()
-    ];
-    
-    // In a real system, this would be signed with a secret key
-    $tokenStr = base64_encode(json_encode($tokenData));
-    
-    return $tokenStr;
-}
-
-// Verify token
-function verifyToken($token) {
-    try {
-        $tokenData = json_decode(base64_decode($token), true);
-        
-        if (!$tokenData || !isset($tokenData["userId"]) || !isset($tokenData["exp"])) {
-            return false;
-        }
-        
-        // Check expiration
-        if ($tokenData["exp"] < time()) {
-            return false;
-        }
-        
-        return $tokenData["userId"];
-    } catch (Exception $e) {
-        return false;
-    }
-}
-function getUserPlacard() {
+function getReplyCountsEndpoint() {
     try {
         $input = file_get_contents("php://input");
         $data = json_decode($input, true);
         
-        // Basic validation
-        if (!$data || !isset($data["username"]) || !isset($data["token"])) {
+        if (!$data || !isset($data["postIds"]) || !isset($data["token"])) {
             echo json_encode(["success" => false, "error" => "Missing required fields"]);
             return;
         }
@@ -1633,141 +1717,91 @@ function getUserPlacard() {
             return;
         }
         
-        // Get username
-        $users = loadData(USERS_FILE);
-        $userData = null;
+        $postIds = $data["postIds"];
+        if (!is_array($postIds)) {
+            $postIds = [$postIds]; // Convert single ID to array
+        }
         
-        foreach ($users as $user) {
-            if (strtolower($user["username"]) === strtolower($username)) {
-                $userData = $user;
+        // Load replies
+        $repliesMetadata = loadData(REPLIES_FILE);
+        $counts = [];
+        
+        // Count replies for each post
+        foreach ($postIds as $postId) {
+            $count = 0;
+            foreach ($repliesMetadata as $reply) {
+                if (isset($reply["postId"]) && $reply["postId"] === $postId) {
+                    $count++;
+                }
+            }
+            $counts[$postId] = $count;
+        }
+        
+        echo json_encode([
+            "success" => true,
+            "counts" => $counts
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(["success" => false, "error" => $e->getMessage()]);
+    }
+}
+
+// Federation and file sharing functions (stubs for now)
+function getFederationStatusEndpoint() {
+    echo json_encode(["success" => true, "status" => "Not implemented"]);
+}
+
+function connectServerEndpoint() {
+    echo json_encode(["success" => false, "error" => "Not implemented"]);
+}
+
+function shareFileEndpoint() {
+    echo json_encode(["success" => false, "error" => "Not implemented"]);
+}
+
+function importFileEndpoint() {
+    echo json_encode(["success" => false, "error" => "Not implemented"]);
+}
+
+// Avatar and placard functions
+function getAvatar() {
+    try {
+        $input = file_get_contents("php://input");
+        $data = json_decode($input, true);
+        
+        if (!$data || !isset($data["username"])) {
+            echo json_encode(["success" => true, "avatarUrl" => null]);
+            return;
+        }
+        
+        $username = $data["username"];
+        
+        // Generate avatar filename using the same method as uploadAvatar
+        $avatarId = generatePlacardId($username);
+        $avatarsDir = DATA_DIR . '/avatars';
+        
+        // Check each possible extension
+        $extensions = ['jpg', 'jpeg', 'png', 'gif'];
+        $avatarUrl = null;
+        
+        foreach ($extensions as $ext) {
+            $potentialFile = $avatarsDir . '/' . $avatarId . '.' . $ext;
+            if (file_exists($potentialFile)) {
+                $avatarUrl = 'data/avatars/' . $avatarId . '.' . $ext;
                 break;
             }
         }
         
-        // Create default placard if user not found
-        if (!$userData) {
-            $placard = createDefaultPlacard($username);
-            echo json_encode(["success" => true, "placard" => $placard]);
-            return;
-        }
-        
-        // Count user's posts and replies (simplified)
-        $postsMetadata = loadData(POSTS_FILE);
-        $repliesMetadata = loadData(REPLIES_FILE);
-        
-        $postCount = 0;
-        $replyCount = 0;
-        
-        foreach ($postsMetadata as $post) {
-            if (isset($post["authorId"]) && $post["authorId"] === $userData["id"]) {
-                $postCount++;
-            }
-        }
-        
-        foreach ($repliesMetadata as $reply) {
-            if (isset($reply["authorId"]) && $reply["authorId"] === $userData["id"]) {
-                $replyCount++;
-            }
-        }
-        
-        // Create and return placard
-        $placard = [
-            "username" => $userData["username"],
-            "role" => $userData["role"],
-            "joined" => $userData["created"],
-            "postCount" => $postCount,
-            "replyCount" => $replyCount,
-            "lastActive" => $userData["last_login"],
-            "signature" => "",
-            "avatarColor" => generateRandomColor()
-        ];
-        
-        echo json_encode(["success" => true, "placard" => $placard]);
+        echo json_encode([
+            "success" => true,
+            "avatarUrl" => $avatarUrl
+        ]);
     } catch (Exception $e) {
-        echo json_encode(["success" => false, "error" => "Server error: " . $e->getMessage()]);
-    }
-}
-// Update post count in user's placard
-function incrementUserPostCount($userId) {
-    $users = loadData(USERS_FILE);
-    $username = null;
-    
-    // Find username for the user ID
-    foreach ($users as $user) {
-        if ($user["id"] === $userId) {
-            $username = $user["username"];
-            break;
-        }
-    }
-    
-    if (!$username) {
-        return false; // User not found
-    }
-    
-    // Update placard file
-    return updatePlacardValue($username, "postCount", 1, true);
-}
-
-// Update reply count in user's placard
-function incrementUserReplyCount($userId) {
-    $users = loadData(USERS_FILE);
-    $username = null;
-    
-    // Find username for the user ID
-    foreach ($users as $user) {
-        if ($user["id"] === $userId) {
-            $username = $user["username"];
-            break;
-        }
-    }
-    
-    if (!$username) {
-        return false; // User not found
-    }
-    
-    // Update placard file
-    return updatePlacardValue($username, "replyCount", 1, true);
-}
-
-// Update a value in the user's placard
-function updatePlacardValue($username, $field, $value, $increment = false) {
-    // Get placard ID and file path
-    $placardId = generatePlacardId($username);
-    $placardFile = PLACARDS_DIR . '/' . $placardId . '.json.enc';
-    
-    // Load existing placard or create a new one
-    if (file_exists($placardFile)) {
-        try {
-            $placard = loadData($placardFile);
-        } catch (Exception $e) {
-            error_log("Error loading placard for update: " . $e->getMessage());
-            $placard = createPlacard($username);
-        }
-    } else {
-        $placard = createPlacard($username);
-    }
-    
-    // Update the value
-    if ($increment && isset($placard[$field]) && is_numeric($placard[$field])) {
-        $placard[$field] += $value;
-    } else {
-        $placard[$field] = $value;
-    }
-    
-    // Update last activity time
-    $placard["lastActive"] = date("c");
-    
-    // Save updated placard
-    try {
-        saveData($placardFile, $placard);
-        return true;
-    } catch (Exception $e) {
-        error_log("Error saving placard: " . $e->getMessage());
-        return false;
+        error_log("getAvatar Error: " . $e->getMessage());
+        echo json_encode(["success" => true, "avatarUrl" => null]);
     }
 }
 
-// Upload avatar endpoint
 function uploadAvatar() {
     $input = file_get_contents("php://input");
     $data = json_decode($input, true);
@@ -1845,86 +1879,82 @@ function uploadAvatar() {
     ]);
 }
 
-function getAvatar() {
+function getUserPlacard() {
     try {
         $input = file_get_contents("php://input");
         $data = json_decode($input, true);
         
-        if (!$data || !isset($data["username"])) {
-            echo json_encode(["success" => true, "avatarUrl" => null]);
+        // Basic validation
+        if (!$data || !isset($data["username"]) || !isset($data["token"])) {
+            echo json_encode(["success" => false, "error" => "Missing required fields"]);
             return;
         }
         
+        // Verify token
+        $userId = verifyToken($data["token"]);
+        if (!$userId) {
+            echo json_encode(["success" => false, "error" => "Invalid token"]);
+            return;
+        }
+        
+        // Get username
         $username = $data["username"];
         
-        // Generate avatar filename using the same method as uploadAvatar
-        $avatarId = generatePlacardId($username);
-        $avatarsDir = DATA_DIR . '/avatars';
+        // Get user data
+        $users = loadData(USERS_FILE);
+        $userData = null;
         
-        // Check each possible extension
-        $extensions = ['jpg', 'jpeg', 'png', 'gif'];
-        $avatarUrl = null;
-        
-        foreach ($extensions as $ext) {
-            $potentialFile = $avatarsDir . '/' . $avatarId . '.' . $ext;
-            if (file_exists($potentialFile)) {
-                $avatarUrl = 'data/avatars/' . $avatarId . '.' . $ext;
+        foreach ($users as $user) {
+            if (strtolower($user["username"]) === strtolower($username)) {
+                $userData = $user;
                 break;
             }
         }
         
-        echo json_encode([
-            "success" => true,
-            "avatarUrl" => $avatarUrl
-        ]);
+        // Create default placard if user not found
+        if (!$userData) {
+            $placard = createDefaultPlacard($username);
+            echo json_encode(["success" => true, "placard" => $placard]);
+            return;
+        }
+        
+        // Count user's posts and replies (simplified)
+        $postsMetadata = loadData(POSTS_FILE);
+        $repliesMetadata = loadData(REPLIES_FILE);
+        
+        $postCount = 0;
+        $replyCount = 0;
+        
+        foreach ($postsMetadata as $post) {
+            if (isset($post["authorId"]) && $post["authorId"] === $userData["id"]) {
+                $postCount++;
+            }
+        }
+        
+        foreach ($repliesMetadata as $reply) {
+            if (isset($reply["authorId"]) && $reply["authorId"] === $userData["id"]) {
+                $replyCount++;
+            }
+        }
+        
+        // Create and return placard
+        $placard = [
+            "username" => $userData["username"],
+            "role" => $userData["role"],
+            "joined" => $userData["created"],
+            "postCount" => $postCount,
+            "replyCount" => $replyCount,
+            "lastActive" => $userData["last_login"],
+            "signature" => "",
+            "avatarColor" => generateRandomColor()
+        ];
+        
+        echo json_encode(["success" => true, "placard" => $placard]);
     } catch (Exception $e) {
-        error_log("getAvatar Error: " . $e->getMessage());
-        echo json_encode(["success" => true, "avatarUrl" => null]);
+        echo json_encode(["success" => false, "error" => "Server error: " . $e->getMessage()]);
     }
 }
 
-// Add before getUserPlacard function
-function createDefaultPlacard($username) {
-    return [
-        "username" => $username,
-        "role" => "user",
-        "joined" => date("c"),
-        "postCount" => 0,
-        "replyCount" => 0,
-        "lastActive" => date("c"),
-        "signature" => "",
-        "avatarColor" => generateRandomColor()
-    ];
-}
-
-// Add these helper functions in api.php at an appropriate location
-function generatePlacardId($username) {
-    return md5(strtolower($username));
-}
-
-function createPlacard($username) {
-    // Create default placard
-    return [
-        "username" => $username,
-        "role" => "user",
-        "joined" => date("c"),
-        "postCount" => 0,
-        "replyCount" => 0,
-        "lastActive" => date("c"),
-        "signature" => "",
-        "avatarColor" => generateRandomColor()
-    ];
-}
-
-function generateRandomColor() {
-    $colors = [
-        "#3498db", "#2ecc71", "#e74c3c", "#f39c12", "#9b59b6", 
-        "#1abc9c", "#34495e", "#16a085", "#d35400", "#8e44ad"
-    ];
-    return $colors[array_rand($colors)];
-}
-
-// Add this function to handle placard updates
 function updatePlacardValueEndpoint() {
     try {
         $input = file_get_contents("php://input");
@@ -1956,131 +1986,128 @@ function updatePlacardValueEndpoint() {
     }
 }
 
-/**
- * NEW: Admin Recovery Function
- * This function decrypts all data files using a provided recovery key.
- * This effectively "rolls back" the encryption to a known state (unencrypted)
- * or allows access to data from a specific past daily key.
- *
- * @param string $recoveryPassword The base secret used to generate daily keys.
- */
-function adminRecovery() {
-    $input = file_get_contents("php://input");
-    $data = json_decode($input, true);
+// Helper functions
+function generatePlacardId($username) {
+    return md5(strtolower($username));
+}
 
-    if (!$data || !isset($data["recoveryPassword"]) || !isset($data["token"])) {
-        echo json_encode(["success" => false, "error" => "Missing required fields for recovery."]);
-        return;
+function createDefaultPlacard($username) {
+    return [
+        "username" => $username,
+        "role" => "user",
+        "joined" => date("c"),
+        "postCount" => 0,
+        "replyCount" => 0,
+        "lastActive" => date("c"),
+        "signature" => "",
+        "avatarColor" => generateRandomColor()
+    ];
+}
+
+function updatePlacardValue($username, $field, $value, $increment = false) {
+    // Get placard ID and file path
+    $placardId = generatePlacardId($username);
+    $placardFile = PLACARDS_DIR . '/' . $placardId . '.json.enc';
+    
+    // Load existing placard or create a new one
+    if (file_exists($placardFile)) {
+        try {
+            $placard = loadData($placardFile);
+        } catch (Exception $e) {
+            error_log("Error loading placard for update: " . $e->getMessage());
+            $placard = createPlacard($username);
+        }
+    } else {
+        $placard = createPlacard($username);
     }
-
-    $token = $data["token"];
-    $recoveryPassword = $data["recoveryPassword"];
-
-    // Verify admin token
-    $userId = verifyToken($token);
-    if (!$userId || !isUserAdmin($userId)) {
-        echo json_encode(["success" => false, "error" => "Permission denied. Only administrators can perform recovery."]);
-        return;
+    
+    // Update the value
+    if ($increment && isset($placard[$field]) && is_numeric($placard[$field])) {
+        $placard[$field] += $value;
+    } else {
+        $placard[$field] = $value;
     }
+    
+    // Update last activity time
+    $placard["lastActive"] = date("c");
+    
+    // Save updated placard
+    try {
+        saveData($placardFile, $placard);
+        return true;
+    } catch (Exception $e) {
+        error_log("Error saving placard: " . $e->getMessage());
+        return false;
+    }
+}
 
-    // Try to derive the initial daily key from the recovery password
-    // This is the key that was used on the day of the last encryption pass before recovery.
-    // If the recovery password is the original base secret, this will effectively
-    // decrypt everything back to plain JSON.
-    $currentDailyKey = generateDailyKey(date('Y-m-d')); // Get today's key based on the base secret
+function createPlacard($username) {
+    // Create default placard
+    return [
+        "username" => $username,
+        "role" => "user",
+        "joined" => date("c"),
+        "postCount" => 0,
+        "replyCount" => 0,
+        "lastActive" => date("c"),
+        "signature" => "",
+        "avatarColor" => generateRandomColor()
+    ];
+}
 
-    // Attempt to decrypt the RECOVERY_KEY_FILE to get the *previous* daily key
-    // This is the key that was used to encrypt the data *before* today's re-encryption.
-    // If RECOVERY_KEY_FILE doesn't exist, it means either no re-encryption has happened yet,
-    // or the system was just set up/re-initialized. In that case, we assume current data is
-    // encrypted with today's key, or is unencrypted.
-    $previousDailyKey = null;
-    if (file_exists(RECOVERY_KEY_FILE)) {
-        $encryptedPreviousKey = file_get_contents(RECOVERY_KEY_FILE);
-        $decryptedPreviousKey = decryptData($encryptedPreviousKey, $currentDailyKey);
+function generateRandomColor() {
+    $colors = [
+        "#3498db", "#2ecc71", "#e74c3c", "#f39c12", "#9b59b6", 
+        "#1abc9c", "#34495e", "#16a085", "#d35400", "#8e44ad"
+    ];
+    return $colors[array_rand($colors)];
+}
+
+// Check if user is admin
+function isUserAdmin($userId) {
+    $users = loadData(USERS_FILE);
+    
+    foreach ($users as $user) {
+        if ($user["id"] === $userId && isset($user["role"]) && $user["role"] === "admin") {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// Generate token
+function generateToken($userId) {
+    $tokenData = [
+        'userId' => $userId,
+        'exp' => time() + (86400 * 7), // 7 days
+        'iat' => time()
+    ];
+    
+    // In a real system, this would be signed with a secret key
+    $tokenStr = base64_encode(json_encode($tokenData));
+    
+    return $tokenStr;
+}
+
+// Verify token
+function verifyToken($token) {
+    try {
+        $tokenData = json_decode(base64_decode($token), true);
         
-        // If decryption successful, use this as the key to decrypt all data files
-        if ($decryptedPreviousKey !== $encryptedPreviousKey) { // Check if decryption actually changed the content
-            $previousDailyKey = $decryptedPreviousKey;
+        if (!$tokenData || !isset($tokenData["userId"]) || !isset($tokenData["exp"])) {
+            return false;
         }
-    }
-
-    // If previousDailyKey is still null, it means RECOVERY_KEY_FILE didn't exist or couldn't be decrypted.
-    // In this scenario, we assume the data is either unencrypted or encrypted with the currentDailyKey.
-    // For recovery, we want to revert to an unencrypted state.
-    $keyToDecryptWith = $previousDailyKey ?: $currentDailyKey; // Try previous, then current if previous not found
-
-    error_log("Admin recovery initiated by user: {$userId}. Attempting to decrypt all data files.");
-
-    // Decrypt all data files back to plain JSON
-    $filesToDecrypt = [USERS_FILE, CATEGORIES_FILE, POSTS_FILE, REPLIES_FILE, SEO_FILE, KEYS_FILE];
-    
-    foreach ($filesToDecrypt as $file) {
-        if (file_exists($file)) {
-            $encryptedContent = file_get_contents($file);
-            $decryptedContent = decryptData($encryptedContent, $keyToDecryptWith);
-            
-            // If decryption was successful, save as plain JSON and rename
-            if ($decryptedContent !== $encryptedContent) {
-                $plainJsonFile = str_replace('.json.enc', '.json', $file);
-                file_put_contents($plainJsonFile, $decryptedContent);
-                unlink($file); // Remove the encrypted file
-            } else {
-                // If decryption failed, it might already be unencrypted or corrupted.
-                // Try to rename it if it's still .json.enc but couldn't be decrypted.
-                if (strpos($file, '.json.enc') !== false) {
-                    $plainJsonFile = str_replace('.json.enc', '.json', $file);
-                    rename($file, $plainJsonFile); // Just rename, assume it was already plain or corrupted
-                }
-            }
+        
+        // Check expiration
+        if ($tokenData["exp"] < time()) {
+            return false;
         }
-    }
-
-    // Decrypt files in subdirectories
-    decryptDirectoryToPlain(CATEGORIES_DIR, $keyToDecryptWith);
-    decryptDirectoryToPlain(POSTS_DIR, $keyToDecryptWith);
-    decryptDirectoryToPlain(REPLIES_DIR, $keyToDecryptWith);
-    decryptDirectoryToPlain(PLACARDS_DIR, $keyToDecryptWith);
-
-    // Update encryption metadata to reflect unencrypted state
-    $encryptionMeta = loadEncryptionMeta();
-    $encryptionMeta['isEncrypted'] = false;
-    $encryptionMeta['lastEncryptionDate'] = ''; // Reset date as it's now unencrypted
-    saveEncryptionMeta($encryptionMeta);
-
-    error_log("Admin recovery completed. All data files are now unencrypted.");
-    echo json_encode(["success" => true, "message" => "Site data decrypted successfully. Please refresh the page."]);
-}
-
-/**
- * NEW: Helper function to decrypt all .json.enc files in a directory to .json.
- */
-function decryptDirectoryToPlain($directory, $key) {
-    if (!is_dir($directory)) {
-        return;
-    }
-    
-    $files = glob($directory . '/*.json.enc');
-    
-    foreach ($files as $file) {
-        if (file_exists($file)) {
-            $encryptedContent = file_get_contents($file);
-            $decryptedContent = decryptData($encryptedContent, $key);
-            
-            if ($decryptedContent !== $encryptedContent) {
-                $plainJsonFile = str_replace('.json.enc', '.json', $file);
-                file_put_contents($plainJsonFile, $decryptedContent);
-                unlink($file); // Remove the encrypted file
-            } else {
-                // If decryption failed, just rename it assuming it's already plain or corrupted
-                $plainJsonFile = str_replace('.json.enc', '.json', $file);
-                rename($file, $plainJsonFile);
-            }
-        }
+        
+        return $tokenData["userId"];
+    } catch (Exception $e) {
+        return false;
     }
 }
 
-// Generate secure ID
-function generateId() {
-    return bin2hex(random_bytes(16));
-}
+?>

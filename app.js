@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('encryption-status').innerHTML = 
                     '<i class="fas fa-spinner fa-spin"></i> <span>Initializing secure system...</span>';
                 
-                // Get encryption status
+                // Get encryption status (this will handle maintenance mode automatically)
                 await this.getEncryptionStatus();
                 
                 // Check if admin exists (for registration)

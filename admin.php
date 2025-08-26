@@ -1,5 +1,5 @@
 <?php
-// Admin Article Management System with Magic ID Authentication
+// Admin Article Management System with Magic ID Authentication and Re-encryption Controls
 
 // Start session properly
 session_start();
@@ -8,7 +8,13 @@ session_start();
 header('Content-Type: text/html; charset=UTF-8');
 
 // Define the magic ID (40 characters)
-define('MAGIC_ID', '8f7d56a1c940e96b23c59363ef5de2b7ac6014e8'); // You should change this to your own random 40-char string
+define('MAGIC_ID', '8f7d56a1c940e96b23c59363ef5de2b7ac6014e8');
+
+// Data directories
+define('DATA_DIR', 'data');
+define('LOCK_FILE', DATA_DIR . '/reencryption.lock');
+define('PROGRESS_FILE', DATA_DIR . '/reencryption_progress.json');
+define('ENCRYPTION_META_FILE', DATA_DIR . '/encryption_meta.json');
 
 // Check if user is authenticated with magic ID
 $isLoggedIn = false;
@@ -19,7 +25,6 @@ if (isset($_POST['magic_id'])) {
     $submittedId = trim($_POST['magic_id']);
     
     if ($submittedId === MAGIC_ID) {
-        // Store authentication in session
         $_SESSION['magic_admin'] = true;
         $isLoggedIn = true;
     } else {
@@ -27,7 +32,7 @@ if (isset($_POST['magic_id'])) {
     }
 }
 
-// Allow direct access via URL for initial setup (for testing only - remove in production)
+// Allow direct access via URL for initial setup
 if (isset($_GET['magic_key']) && $_GET['magic_key'] === MAGIC_ID) {
     $_SESSION['magic_admin'] = true;
     $isLoggedIn = true;
@@ -40,17 +45,32 @@ if (isset($_SESSION['magic_admin']) && $_SESSION['magic_admin'] === true) {
 
 // Handle logout
 if (isset($_GET['action']) && $_GET['action'] === 'logout') {
-    // Clear the entire session
     session_unset();
     session_destroy();
-    
-    // Redirect to prevent resubmission
     header('Location: admin.php');
     exit;
 }
 
+// Handle AJAX requests for re-encryption
+if (isset($_POST['ajax_action']) && $isLoggedIn) {
+    header('Content-Type: application/json');
+    
+    switch ($_POST['ajax_action']) {
+        case 'start_reencryption':
+            echo json_encode(startDailyReencryption());
+            exit;
+            
+        case 'get_reencryption_status':
+            echo json_encode(getReencryptionStatus());
+            exit;
+            
+        case 'get_encryption_info':
+            echo json_encode(getEncryptionInfo());
+            exit;
+    }
+}
+
 // Create data directory if it doesn't exist
-define('DATA_DIR', 'data');
 if (!file_exists(DATA_DIR)) {
     mkdir(DATA_DIR, 0755, true);
 }
@@ -62,19 +82,438 @@ if (!file_exists(ARTICLES_DIR)) {
 }
 define('ARTICLES_INDEX_FILE', DATA_DIR . '/articles_index.json');
 
+// Re-encryption functions
+function generateDailyKey($dateString) {
+    $baseSecret = "S3cure#F0rum#System#2025";
+    $combinedString = $baseSecret . $dateString;
+    return hash('sha256', $combinedString);
+}
+
+function generateNewMasterKey() {
+    // Generate a secure random key for master encryption
+    return bin2hex(random_bytes(32)); // 64-character hex string (256-bit key)
+}
+
+function isSystemLocked() {
+    return file_exists(LOCK_FILE);
+}
+
+function createSystemLock() {
+    $lockData = [
+        'started' => time(),
+        'pid' => getmypid(),
+        'admin_triggered' => true,
+        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown'
+    ];
+    
+    return file_put_contents(LOCK_FILE, json_encode($lockData)) !== false;
+}
+
+function removeSystemLock() {
+    if (file_exists(LOCK_FILE)) {
+        unlink(LOCK_FILE);
+    }
+    if (file_exists(PROGRESS_FILE)) {
+        unlink(PROGRESS_FILE);
+    }
+}
+
+function updateProgress($step, $current, $total, $message = '') {
+    $progress = [
+        'step' => $step,
+        'current' => $current,
+        'total' => $total,
+        'percentage' => $total > 0 ? ($current / $total) * 100 : 0,
+        'message' => $message,
+        'timestamp' => time()
+    ];
+    
+    file_put_contents(PROGRESS_FILE, json_encode($progress));
+    return $progress;
+}
+
+function loadEncryptionMeta() {
+    if (file_exists(ENCRYPTION_META_FILE)) {
+        $data = file_get_contents(ENCRYPTION_META_FILE);
+        $meta = json_decode($data, true);
+        
+        if (is_array($meta)) {
+            return array_merge([
+                'lastEncryptionDate' => '',
+                'isEncrypted' => false,
+                'lastReEncryption' => '',
+                'filesProcessed' => 0,
+                'filesFailed' => 0
+            ], $meta);
+        }
+    }
+    
+    return [
+        'lastEncryptionDate' => '',
+        'isEncrypted' => false,
+        'lastReEncryption' => '',
+        'filesProcessed' => 0,
+        'filesFailed' => 0
+    ];
+}
+
+function saveEncryptionMeta($metadata) {
+    $metadata['lastUpdate'] = date('c');
+    return file_put_contents(ENCRYPTION_META_FILE, json_encode($metadata, JSON_PRETTY_PRINT));
+}
+
+function startDailyReencryption() {
+    // Call the API endpoint for daily re-encryption
+    $apiUrl = 'api.php?action=daily_reencrypt';
+    
+    // Use cURL to call the API
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $apiUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 300); // 5 minutes timeout
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($response === false || $httpCode !== 200) {
+        return ['success' => false, 'error' => 'Failed to start daily re-encryption'];
+    }
+    
+    $result = json_decode($response, true);
+    return $result ?: ['success' => false, 'error' => 'Invalid response from API'];
+}
+
+function startReencryption() {
+    if (isSystemLocked()) {
+        return ['success' => false, 'error' => 'Re-encryption already in progress'];
+    }
+    
+    if (!createSystemLock()) {
+        return ['success' => false, 'error' => 'Failed to create system lock'];
+    }
+    
+    // Start re-encryption in background
+    if (function_exists('fastcgi_finish_request')) {
+        fastcgi_finish_request();
+    }
+    
+    try {
+        performReencryption();
+        return ['success' => true, 'message' => 'Re-encryption started'];
+    } catch (Exception $e) {
+        removeSystemLock();
+        return ['success' => false, 'error' => $e->getMessage()];
+    }
+}
+
+function performReencryption() {
+    try {
+        $today = date('Y-m-d');
+        $encryptionMeta = loadEncryptionMeta();
+        
+        // Determine keys
+        $oldKey = isset($encryptionMeta['masterKey']) ? $encryptionMeta['masterKey'] : null;
+        $newKey = generateNewMasterKey(); // Generate a fresh random master key
+        
+        updateProgress('starting', 0, 100, 'Initializing re-encryption process...');
+        
+        // Get files to process
+        $filesToProcess = getFilesToReencrypt();
+        $totalFiles = count($filesToProcess);
+        
+        updateProgress('processing', 0, $totalFiles, 'Beginning file re-encryption...');
+        
+        $processed = 0;
+        $failed = 0;
+        
+        foreach ($filesToProcess as $file) {
+            $processed++;
+            
+            updateProgress('processing', $processed, $totalFiles, 
+                "Processing: " . basename($file['path']));
+            
+            if ($file['type'] === 'file') {
+                $result = reencryptSingleFile($file['path'], $oldKey, $newKey);
+            } else {
+                $result = reencryptDirectoryFiles($file['path'], $oldKey, $newKey);
+            }
+            
+            if (!$result) {
+                $failed++;
+                error_log("Failed to re-encrypt: " . $file['path']);
+            }
+            
+            usleep(10000); // 10ms delay
+        }
+        
+        updateProgress('finalizing', $totalFiles, $totalFiles, 'Updating metadata...');
+        
+        // Update metadata
+        $encryptionMeta['lastEncryptionDate'] = $today;
+        $encryptionMeta['isEncrypted'] = true;
+        $encryptionMeta['lastReEncryption'] = date('c');
+        $encryptionMeta['filesProcessed'] = $processed;
+        $encryptionMeta['filesFailed'] = $failed;
+        $encryptionMeta['adminTriggered'] = true;
+        $encryptionMeta['masterKey'] = $newKey; // Store the new master key
+        saveEncryptionMeta($encryptionMeta);
+        
+        updateProgress('complete', $totalFiles, $totalFiles, 'Re-encryption completed!');
+        
+        sleep(2);
+        removeSystemLock();
+        
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("Re-encryption failed: " . $e->getMessage());
+        updateProgress('error', 0, 100, 'Re-encryption failed: ' . $e->getMessage());
+        removeSystemLock();
+        return false;
+    }
+}
+
+function getFilesToReencrypt() {
+    $files = [];
+    
+    // Main forum files
+    $mainFiles = [
+        DATA_DIR . '/users.json.enc',
+        DATA_DIR . '/categories.json.enc', 
+        DATA_DIR . '/posts.json.enc',
+        DATA_DIR . '/replies.json.enc',
+        DATA_DIR . '/seo.json.enc',
+        DATA_DIR . '/server_keys.json.enc'
+    ];
+    
+    foreach ($mainFiles as $file) {
+        if (file_exists($file)) {
+            $files[] = ['path' => $file, 'type' => 'file'];
+        }
+    }
+    
+    // Article files
+    if (file_exists(ARTICLES_INDEX_FILE)) {
+        $files[] = ['path' => ARTICLES_INDEX_FILE, 'type' => 'file'];
+    }
+    
+    if (is_dir(ARTICLES_DIR)) {
+        $articleFiles = glob(ARTICLES_DIR . '/*.json');
+        foreach ($articleFiles as $file) {
+            $files[] = ['path' => $file, 'type' => 'file'];
+        }
+    }
+    
+    // Forum directories
+    $directories = [
+        DATA_DIR . '/categories',
+        DATA_DIR . '/posts', 
+        DATA_DIR . '/replies',
+        DATA_DIR . '/placards'
+    ];
+    
+    foreach ($directories as $dir) {
+        if (is_dir($dir)) {
+            $files[] = ['path' => $dir, 'type' => 'directory'];
+        }
+    }
+    
+    return $files;
+}
+
+function reencryptSingleFile($file, $oldKey, $newKey) {
+    $tempFile = $file . '.tmp.' . time();
+    $backupFile = $file . '.backup.' . time();
+    
+    try {
+        if (!copy($file, $backupFile)) {
+            throw new Exception("Failed to create backup for $file");
+        }
+        
+        $rawData = file_get_contents($file);
+        if ($rawData === false) {
+            throw new Exception("Failed to read $file");
+        }
+        
+        // Decrypt data - handle multiple possible formats
+        $decryptedData = null;
+        
+        if ($oldKey === null) {
+            // No old key, assume it's plain JSON
+            if (isLikelyJson($rawData)) {
+                $decryptedData = $rawData;
+            } else {
+                throw new Exception("Cannot determine data format for $file and no old key provided");
+            }
+        } else {
+            // Try to decrypt with old key first
+            $decryptedData = safeDecryptData($rawData, $oldKey);
+            
+            // If decryption didn't work, maybe it's plain JSON or needs different key
+            if (json_decode($decryptedData, true) === null && $decryptedData !== 'null') {
+                // Try treating as plain JSON
+                if (isLikelyJson($rawData)) {
+                    $decryptedData = $rawData;
+                } else {
+                    // Try with today's daily key as fallback (for old daily-encrypted files)
+                    $today = date('Y-m-d');
+                    $dailyKey = generateDailyKey($today);
+                    $decryptedData = safeDecryptData($rawData, $dailyKey);
+                    
+                    if (json_decode($decryptedData, true) === null && $decryptedData !== 'null') {
+                        // Try yesterday's daily key
+                        $yesterday = date('Y-m-d', strtotime('-1 day'));
+                        $yesterdayKey = generateDailyKey($yesterday);
+                        $decryptedData = safeDecryptData($rawData, $yesterdayKey);
+                        
+                        if (json_decode($decryptedData, true) === null && $decryptedData !== 'null') {
+                            throw new Exception("Cannot decrypt or parse data for $file with any available key");
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Re-encrypt with new key
+        $newEncryptedData = encryptData($decryptedData, $newKey);
+        
+        if (file_put_contents($tempFile, $newEncryptedData) === false) {
+            throw new Exception("Failed to write temporary file for $file");
+        }
+        
+        if (!rename($tempFile, $file)) {
+            throw new Exception("Failed to move temporary file for $file");
+        }
+        
+        return true;
+        
+    } catch (Exception $e) {
+        if (file_exists($tempFile)) {
+            unlink($tempFile);
+        }
+        
+        if (file_exists($backupFile)) {
+            copy($backupFile, $file);
+            unlink($backupFile);
+        }
+        
+        error_log("File re-encryption failed for $file: " . $e->getMessage());
+        return false;
+    }
+}
+
+function reencryptDirectoryFiles($directory, $oldKey, $newKey) {
+    if (!is_dir($directory)) {
+        return true;
+    }
+    
+    $files = glob($directory . '/*.json.enc');
+    $success = true;
+    
+    foreach ($files as $file) {
+        if (!reencryptSingleFile($file, $oldKey, $newKey)) {
+            $success = false;
+        }
+    }
+    
+    return $success;
+}
+
+function encryptData($data, $key) {
+    $encKey = substr(hash('sha256', $key, true), 0, 32);
+    $iv = openssl_random_pseudo_bytes(16);
+    $encrypted = openssl_encrypt($data, 'AES-256-CBC', $encKey, 0, $iv);
+    return base64_encode($iv . $encrypted);
+}
+
+function safeDecryptData($encryptedData, $key) {
+    try {
+        $decKey = substr(hash('sha256', $key, true), 0, 32);
+        
+        if (!isEncryptedData($encryptedData)) {
+            return $encryptedData;
+        }
+        
+        $data = base64_decode($encryptedData);
+        
+        if ($data === false || strlen($data) < 16) {
+            return $encryptedData;
+        }
+        
+        $iv = substr($data, 0, 16);
+        $encrypted = substr($data, 16);
+        
+        $decrypted = openssl_decrypt($encrypted, 'AES-256-CBC', $decKey, 0, $iv);
+        
+        if ($decrypted === false) {
+            return $encryptedData;
+        }
+        
+        return $decrypted;
+        
+    } catch (Exception $e) {
+        return $encryptedData;
+    }
+}
+
+function isEncryptedData($data) {
+    if (base64_decode($data, true) === false) {
+        return false;
+    }
+    
+    $trimmed = trim($data);
+    if (($trimmed[0] === '{' && substr($trimmed, -1) === '}') || 
+        ($trimmed[0] === '[' && substr($trimmed, -1) === ']')) {
+        return false;
+    }
+    
+    $decoded = base64_decode($data);
+    if (strlen($decoded) < 32) {
+        return false;
+    }
+    
+    return true;
+}
+
+function isLikelyJson($data) {
+    $trimmed = trim($data);
+    return (($trimmed[0] === '{' && substr($trimmed, -1) === '}') || 
+            ($trimmed[0] === '[' && substr($trimmed, -1) === ']')) &&
+           json_decode($data, true) !== null;
+}
+
+function getReencryptionStatus() {
+    if (!file_exists(PROGRESS_FILE)) {
+        return ['success' => true, 'progress' => null, 'locked' => isSystemLocked()];
+    }
+    
+    $progress = json_decode(file_get_contents(PROGRESS_FILE), true);
+    return ['success' => true, 'progress' => $progress, 'locked' => isSystemLocked()];
+}
+
+function getEncryptionInfo() {
+    $meta = loadEncryptionMeta();
+    $status = [
+        'isEncrypted' => $meta['isEncrypted'],
+        'lastEncryptionDate' => $meta['lastEncryptionDate'],
+        'lastReEncryption' => $meta['lastReEncryption'],
+        'filesProcessed' => $meta['filesProcessed'],
+        'filesFailed' => $meta['filesFailed'],
+        'locked' => isSystemLocked()
+    ];
+    
+    return ['success' => true, 'status' => $status];
+}
+
 // Helper function to create URL-friendly slug
 function createSlug($text) {
-    // Replace non letter or digits by -
     $text = preg_replace('~[^\pL\d]+~u', '-', $text);
-    // Transliterate
     $text = iconv('utf-8', 'us-ascii//TRANSLIT', $text);
-    // Remove unwanted characters
     $text = preg_replace('~[^-\w]+~', '', $text);
-    // Trim
     $text = trim($text, '-');
-    // Remove duplicate -
     $text = preg_replace('~-+~', '-', $text);
-    // Lowercase
     $text = strtolower($text);
     
     return $text;
@@ -83,13 +522,11 @@ function createSlug($text) {
 // Function to load unencrypted JSON data
 function loadData($file) {
     if (!file_exists($file)) {
-        // Create empty file with default structure
         $defaultData = [];
         saveData($file, $defaultData);
         return $defaultData;
     }
     
-    // Read file contents
     $jsonData = file_get_contents($file);
     $data = json_decode($jsonData, true);
     
@@ -98,16 +535,12 @@ function loadData($file) {
 
 // Function to save unencrypted JSON data
 function saveData($file, $data) {
-    // Create directory if needed
     $dir = dirname($file);
     if (!file_exists($dir)) {
         mkdir($dir, 0755, true);
     }
     
-    // Convert data to JSON with pretty formatting
     $jsonData = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    
-    // Save as plain text JSON
     return file_put_contents($file, $jsonData);
 }
 
@@ -120,28 +553,23 @@ if ($isLoggedIn) {
         switch ($_POST['action']) {
             case 'create_article':
             case 'update_article':
-                // Validate article data
                 if (!isset($_POST['title']) || trim($_POST['title']) === '') {
                     $message = 'Title is required';
                     break;
                 }
                 
-                // Generate timestamp for new articles
                 $timestamp = isset($_POST['created']) && $_POST['action'] === 'update_article' 
                     ? strtotime($_POST['created']) 
                     : time();
                 
-                // Create slug from title
                 $titleSlug = createSlug($_POST['title']);
                 
-                // Prepare article ID - for new articles, use timestamp and slug
                 if ($_POST['action'] === 'create_article' || empty($_POST['article_id'])) {
                     $articleId = $timestamp . '_' . $titleSlug;
                 } else {
                     $articleId = $_POST['article_id'];
                 }
                 
-                // Prepare article data
                 $article = [
                     'id' => $articleId,
                     'title' => $_POST['title'],
@@ -162,14 +590,11 @@ if ($isLoggedIn) {
                     'status' => isset($_POST['status']) ? $_POST['status'] : 'published'
                 ];
                 
-                // Save article file (unencrypted)
                 $articleFile = ARTICLES_DIR . '/' . $articleId . '.json';
                 saveData($articleFile, $article);
                 
-                // Update articles index
                 $articlesIndex = loadData(ARTICLES_INDEX_FILE);
                 
-                // Check if article already exists in index
                 $found = false;
                 foreach ($articlesIndex as $key => $indexItem) {
                     if ($indexItem['id'] === $articleId) {
@@ -203,14 +628,12 @@ if ($isLoggedIn) {
                     ];
                 }
                 
-                // Sort by timestamp (newest first)
                 usort($articlesIndex, function($a, $b) {
                     return $b['timestamp'] - $a['timestamp'];
                 });
                 
                 saveData(ARTICLES_INDEX_FILE, $articlesIndex);
                 
-                // Redirect to prevent form resubmission
                 header('Location: admin.php?message=' . urlencode($_POST['action'] === 'create_article' ? 
                     'Article created successfully' : 'Article updated successfully'));
                 exit;
@@ -224,12 +647,10 @@ if ($isLoggedIn) {
                 $articleId = $_POST['article_id'];
                 $articleFile = ARTICLES_DIR . '/' . $articleId . '.json';
                 
-                // Delete article file
                 if (file_exists($articleFile)) {
                     unlink($articleFile);
                 }
                 
-                // Update articles index
                 $articlesIndex = loadData(ARTICLES_INDEX_FILE);
                 $newIndex = [];
                 
@@ -241,18 +662,15 @@ if ($isLoggedIn) {
                 
                 saveData(ARTICLES_INDEX_FILE, $newIndex);
                 
-                // Redirect to prevent form resubmission
                 header('Location: admin.php?message=' . urlencode('Article deleted successfully'));
                 exit;
         }
     }
     
-    // Check for success message in URL
     if (isset($_GET['message'])) {
         $message = $_GET['message'];
     }
     
-    // Load article for editing
     if (isset($_GET['edit']) && !empty($_GET['edit'])) {
         $articleId = $_GET['edit'];
         $articleFile = ARTICLES_DIR . '/' . $articleId . '.json';
@@ -266,11 +684,9 @@ if ($isLoggedIn) {
 // Load articles for display
 $articles = [];
 if ($isLoggedIn) {
-    // Load articles index
     if (file_exists(ARTICLES_INDEX_FILE)) {
         $articlesIndex = loadData(ARTICLES_INDEX_FILE);
         
-        // Sort by timestamp (newest first)
         usort($articlesIndex, function($a, $b) {
             return $b['timestamp'] - $a['timestamp'];
         });
@@ -285,13 +701,12 @@ if ($isLoggedIn) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Article Admin Panel</title>
+    <title>Admin Panel - Secure Forum</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="article-styles.css">
     <link rel="stylesheet" href="dark-theme-styles.css">
     <style>
-        /* Admin styles */
         .admin-container {
             max-width: 1200px;
             margin: 20px auto;
@@ -352,6 +767,120 @@ if ($isLoggedIn) {
             background-color: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+        }
+        
+        .security-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .security-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .security-title {
+            font-size: 1.5rem;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .encryption-status {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #4CAF50;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+        }
+        
+        .status-indicator.inactive {
+            background: #f44336;
+            box-shadow: 0 0 10px rgba(244, 67, 54, 0.5);
+        }
+        
+        .encryption-details {
+            flex: 1;
+        }
+        
+        .encryption-details h4 {
+            margin: 0 0 5px 0;
+            font-size: 1.1rem;
+        }
+        
+        .encryption-details p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+        
+        .reencrypt-btn {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid rgba(255,255,255,0.3);
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .reencrypt-btn:hover {
+            background: rgba(255,255,255,0.3);
+            border-color: rgba(255,255,255,0.5);
+        }
+        
+        .reencrypt-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .progress-container {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .progress-bar {
+            background: rgba(255,255,255,0.2);
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        
+        .progress-fill {
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+        
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
         }
         
         .article-list {
@@ -420,21 +949,7 @@ if ($isLoggedIn) {
             resize: vertical;
         }
         
-        .edit-mode-toggle {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-            padding: 10px;
-            background-color: var(--info-bg, #e3f2fd);
-            border-radius: 4px;
-        }
-        
-        .edit-mode-toggle label {
-            margin-left: 10px;
-            font-weight: 600;
-        }
-        
-        /* Admin-specific dark theme adjustments */
+        /* Dark theme adjustments */
         [data-theme="dark"] .admin-container {
             background-color: #1a1a2e;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
@@ -469,31 +984,6 @@ if ($isLoggedIn) {
             background-color: #4c0519;
             color: #fda4af;
             border-color: #7f1d1d;
-        }
-        
-        [data-theme="dark"] .edit-mode-toggle {
-            background-color: #1e3a8a;
-        }
-        
-        .login-options {
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px solid #eee;
-        }
-        
-        .magic-button {
-            display: inline-block;
-            background: none;
-            border: none;
-            color: #2196F3;
-            text-decoration: underline;
-            cursor: pointer;
-            padding: 0;
-            font-size: 0.9em;
-        }
-        
-        .magic-button:hover {
-            color: #0b7dda;
         }
     </style>
 </head>
@@ -530,7 +1020,7 @@ if ($isLoggedIn) {
     <!-- Admin Dashboard -->
     <div class="admin-container">
         <div class="admin-header">
-            <h1 class="admin-title"><i class="fas fa-newspaper"></i> Article Admin</h1>
+            <h1 class="admin-title"><i class="fas fa-shield-alt"></i> Admin Control Panel</h1>
             <div class="admin-actions">
                 <a href="index.php" class="btn btn-secondary">
                     <i class="fas fa-home"></i> Back to Home
@@ -547,9 +1037,40 @@ if ($isLoggedIn) {
         </div>
         <?php endif; ?>
         
-        <!-- Article List -->
+        <!-- Security & Encryption Section -->
+        <div class="security-section">
+            <div class="security-header">
+                <h2 class="security-title">
+                    <i class="fas fa-lock"></i>
+                    Security & Encryption
+                </h2>
+            </div>
+            
+            <div class="encryption-status" id="encryption-status">
+                <div class="status-indicator" id="status-indicator"></div>
+                <div class="encryption-details">
+                    <h4 id="status-title">Loading encryption status...</h4>
+                    <p id="status-description">Please wait while we check the system status.</p>
+                </div>
+                <button class="reencrypt-btn" id="reencrypt-btn" disabled>
+                    <i class="fas fa-calendar-day"></i> Daily Re-encryption
+                </button>
+            </div>
+            
+            <div class="progress-container" id="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="progress-text">
+                    <span id="progress-percentage">0%</span>
+                    <span id="progress-message">Initializing...</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Article Management Section -->
         <div class="section">
-            <h2><i class="fas fa-list"></i> Article Management</h2>
+            <h2><i class="fas fa-newspaper"></i> Article Management</h2>
             
             <div class="actions" style="margin-bottom: 15px;">
                 <a href="admin.php" class="btn btn-primary">
@@ -612,14 +1133,6 @@ if ($isLoggedIn) {
             <h2>
                 <?php echo $articleFormData ? '<i class="fas fa-edit"></i> Edit Article' : '<i class="fas fa-plus"></i> Create New Article'; ?>
             </h2>
-            
-            <div class="edit-mode-toggle">
-                <input type="checkbox" id="edit-article-mode" class="toggle-input">
-                <label for="edit-article-mode">Enable Visual Editor Mode</label>
-                <span style="margin-left: 10px; font-size: 0.85rem; color: var(--text-muted);">
-                    (Visual editor will activate after saving)
-                </span>
-            </div>
             
             <form method="post" action="admin.php" class="article-form">
                 <input type="hidden" name="action" value="<?php echo $articleFormData ? 'update_article' : 'create_article'; ?>">
@@ -712,699 +1225,194 @@ if ($isLoggedIn) {
         </div>
     </div>
     
-    <!-- Include Admin Editor JS -->
     <script>
-        // Article Admin Editor from paste.txt
-        // Initialize article admin editor
-        function initArticleEditor() {
-            const adminMode = document.getElementById('edit-article-mode');
-            const articleContainer = document.querySelector('.article-container');
-            
-            if (!adminMode || !articleContainer) return;
-            
-            let currentlyEditing = null;
-            let originalContent = {};
-            
-            // Toggle admin editing mode
-            adminMode.addEventListener('change', function() {
-                if (this.checked) {
-                    articleContainer.classList.add('admin-mode');
-                    enableEditableElements();
-                } else {
-                    articleContainer.classList.remove('admin-mode');
-                    disableEditableElements();
-                }
-            });
-            
-            // Enable all editable elements
-            function enableEditableElements() {
-                const editables = document.querySelectorAll('[data-editable]');
-                
-                editables.forEach(element => {
-                    element.addEventListener('click', startEditing);
-                });
-                
-                // Create edit toolbar
-                const toolbar = document.createElement('div');
-                toolbar.className = 'edit-toolbar hidden';
-                toolbar.innerHTML = `
-                    <button class="save-btn">Save Changes</button>
-                    <button class="cancel-btn">Cancel</button>
-                `;
-                document.body.appendChild(toolbar);
-                
-                // Add toolbar button event listeners
-                toolbar.querySelector('.save-btn').addEventListener('click', saveChanges);
-                toolbar.querySelector('.cancel-btn').addEventListener('click', cancelEditing);
+        // Encryption management system
+        class EncryptionManager {
+            constructor() {
+                this.statusCheckInterval = null;
+                this.init();
             }
             
-            // Disable all editable elements
-            function disableEditableElements() {
-                const editables = document.querySelectorAll('[data-editable]');
-                
-                editables.forEach(element => {
-                    element.removeEventListener('click', startEditing);
-                });
-                
-                // Remove edit toolbar
-                const toolbar = document.querySelector('.edit-toolbar');
-                if (toolbar) {
-                    document.body.removeChild(toolbar);
+            init() {
+                this.loadEncryptionStatus();
+                this.setupEventListeners();
+                this.startStatusMonitoring();
+            }
+            
+            setupEventListeners() {
+                const reencryptBtn = document.getElementById('reencrypt-btn');
+                if (reencryptBtn) {
+                    reencryptBtn.addEventListener('click', () => this.startReencryption());
                 }
             }
             
-            // Start editing an element
-            function startEditing(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // If already editing, save changes first
-                if (currentlyEditing) {
-                    saveChanges();
-                }
-                
-                currentlyEditing = this;
-                currentlyEditing.classList.add('editing');
-                
-                // Store original content for cancel operation
-                originalContent = {
-                    html: currentlyEditing.innerHTML,
-                    text: currentlyEditing.textContent.trim()
-                };
-                
-                // Create editor based on data type
-                const editType = currentlyEditing.getAttribute('data-editable');
-                const fieldName = currentlyEditing.getAttribute('data-field');
-                
-                switch (editType) {
-                    case 'text':
-                        createTextEditor(currentlyEditing, originalContent.text);
-                        break;
-                    case 'richtext':
-                        createRichTextEditor(currentlyEditing, originalContent.html);
-                        break;
-                    case 'image':
-                        createImageEditor(currentlyEditing);
-                        break;
-                    case 'tags':
-                        createTagsEditor(currentlyEditing);
-                        break;
-                    case 'score':
-                        createScoreEditor(currentlyEditing, originalContent.text);
-                        break;
-                    case 'date':
-                        createDateEditor(currentlyEditing, originalContent.text);
-                        break;
-                    case 'category':
-                        createCategoryEditor(currentlyEditing, originalContent.text);
-                        break;
-                    case 'number':
-                        createNumberEditor(currentlyEditing, originalContent.text);
-                        break;
-                    case 'related':
-                        createRelatedArticlesEditor(currentlyEditing);
-                        break;
-                    case 'sponsored':
-                        createSponsoredContentEditor(currentlyEditing);
-                        break;
-                    case 'section':
-                        createSectionEditor(currentlyEditing);
-                        break;
-                }
-                
-                // Show toolbar
-                const toolbar = document.querySelector('.edit-toolbar');
-                if (toolbar) {
-                    toolbar.classList.remove('hidden');
-                }
-            }
-            
-            // Create simple text editor
-            function createTextEditor(element, value) {
-                element.innerHTML = `<input type="text" class="inline-editor" value="${value}">`;
-                const input = element.querySelector('input');
-                input.focus();
-                
-                // Prevent event propagation
-                input.addEventListener('click', e => e.stopPropagation());
-                input.addEventListener('keydown', e => {
-                    if (e.key === 'Enter') {
-                        saveChanges();
-                    } else if (e.key === 'Escape') {
-                        cancelEditing();
-                    }
-                });
-            }
-            
-            // Create rich text editor
-            function createRichTextEditor(element, html) {
-                element.innerHTML = `<textarea class="richtext-editor" rows="5">${html}</textarea>`;
-                const textarea = element.querySelector('textarea');
-                textarea.focus();
-                
-                // Prevent event propagation
-                textarea.addEventListener('click', e => e.stopPropagation());
-                textarea.addEventListener('keydown', e => {
-                    if (e.key === 'Escape') {
-                        cancelEditing();
-                    }
-                });
-            }
-            
-            // Create image editor
-            function createImageEditor(element) {
-                const currentImage = element.style.backgroundImage.replace(/url\(['"]?(.*?)['"]?\)/i, '$1');
-                
-                element.innerHTML = `
-                    <div class="image-editor">
-                        <input type="text" class="image-url" value="${currentImage}" placeholder="Image URL">
-                        <div class="upload-controls">
-                            <input type="file" class="image-upload" accept="image/*">
-                            <button class="upload-btn">Upload New Image</button>
-                        </div>
-                    </div>
-                `;
-                
-                const urlInput = element.querySelector('.image-url');
-                const fileInput = element.querySelector('.image-upload');
-                const uploadBtn = element.querySelector('.upload-btn');
-                
-                // Prevent event propagation
-                element.querySelector('.image-editor').addEventListener('click', e => e.stopPropagation());
-                
-                // Setup upload button
-                uploadBtn.addEventListener('click', () => {
-                    fileInput.click();
-                });
-                
-                // Handle file upload
-                fileInput.addEventListener('change', e => {
-                    if (e.target.files && e.target.files[0]) {
-                        // This would normally upload to your server, but we'll do a simple preview
-                        const reader = new FileReader();
-                        reader.onload = function(event) {
-                            urlInput.value = event.target.result;
-                        };
-                        reader.readAsDataURL(e.target.files[0]);
-                    }
-                });
-            }
-            
-            // Create tags editor
-            function createTagsEditor(element) {
-                // Get current tags
-                const tags = Array.from(element.querySelectorAll('.article-tag'))
-                    .map(tag => tag.textContent.trim().replace('#', ''));
-                
-                element.innerHTML = `
-                    <div class="tags-editor">
-                        <input type="text" class="tags-input" value="${tags.join(', ')}" placeholder="Enter tags separated by commas">
-                        <small>Enter tags separated by commas</small>
-                    </div>
-                `;
-                
-                // Prevent event propagation
-                element.querySelector('.tags-editor').addEventListener('click', e => e.stopPropagation());
-            }
-            
-            // Create score editor
-            function createScoreEditor(element, value) {
-                element.innerHTML = `
-                    <div class="score-editor">
-                        <input type="range" min="1" max="100" value="${value}" class="score-range">
-                        <span class="score-value">${value}</span>
-                    </div>
-                `;
-                
-                const rangeInput = element.querySelector('.score-range');
-                const valueSpan = element.querySelector('.score-value');
-                
-                // Update value display when slider changes
-                rangeInput.addEventListener('input', () => {
-                    valueSpan.textContent = rangeInput.value;
+            async loadEncryptionStatus() {
+                try {
+                    const response = await fetch('admin.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: 'ajax_action=get_encryption_info'
+                    });
                     
-                    // Update effectiveness class
-                    const score = parseInt(rangeInput.value);
-                    element.className = 'score-circle';
+                    const result = await response.json();
                     
-                    if (score >= 100) {
-                        element.classList.add('high-effectiveness');
-                    } else if (score >= 50) {
-                        element.classList.add('medium-effectiveness');
+                    if (result.success) {
+                        this.updateStatusDisplay(result.status);
+                    }
+                } catch (error) {
+                    console.error('Failed to load encryption status:', error);
+                }
+            }
+            
+            updateStatusDisplay(status) {
+                const indicator = document.getElementById('status-indicator');
+                const title = document.getElementById('status-title');
+                const description = document.getElementById('status-description');
+                const btn = document.getElementById('reencrypt-btn');
+                
+                if (status.locked) {
+                    indicator.className = 'status-indicator';
+                    title.textContent = 'Daily Re-encryption in Progress';
+                    description.textContent = 'System is currently performing daily re-encryption. Please wait...';
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                } else if (status.isEncrypted) {
+                    indicator.className = 'status-indicator';
+                    title.textContent = 'Encryption Active';
+                    
+                    if (status.lastEncryptionDate) {
+                        const lastDate = new Date(status.lastEncryptionDate).toLocaleDateString();
+                        description.textContent = `Last daily re-encryption: ${lastDate}. Files processed: ${status.filesProcessed || 0}`;
                     } else {
-                        element.classList.add('low-effectiveness');
+                        description.textContent = 'Daily encryption is active and protecting your data.';
                     }
-                });
-                
-                // Prevent event propagation
-                element.querySelector('.score-editor').addEventListener('click', e => e.stopPropagation());
-            }
-            
-            // Create date editor
-            function createDateEditor(element, value) {
-                const dateValue = element.getAttribute('data-time') || '';
-                
-                element.innerHTML = `
-                    <div class="date-editor">
-                        <input type="datetime-local" class="date-input" value="${dateValue.replace(/\+.*$/, '')}">
-                    </div>
-                `;
-                
-                // Prevent event propagation
-                element.querySelector('.date-editor').addEventListener('click', e => e.stopPropagation());
-            }
-            
-            // Create category editor
-            function createCategoryEditor(element, value) {
-                element.innerHTML = `
-                    <div class="category-editor">
-                        <select class="category-select">
-                            <option value="technology" ${value.trim() === 'Technology' ? 'selected' : ''}>Technology</option>
-                            <option value="business" ${value.trim() === 'Business' ? 'selected' : ''}>Business</option>
-                            <option value="science" ${value.trim() === 'Science' ? 'selected' : ''}>Science</option>
-                            <option value="health" ${value.trim() === 'Health' ? 'selected' : ''}>Health</option>
-                        </select>
-                    </div>
-                `;
-                
-                // Prevent event propagation
-                element.querySelector('.category-editor').addEventListener('click', e => e.stopPropagation());
-            }
-            
-            // Create number editor
-            function createNumberEditor(element, value) {
-                element.innerHTML = `<input type="number" min="0" class="number-editor" value="${value}">`;
-                const input = element.querySelector('input');
-                input.focus();
-                
-                // Prevent event propagation
-                input.addEventListener('click', e => e.stopPropagation());
-            }
-            
-            // Create related articles editor
-            function createRelatedArticlesEditor(element) {
-                // This would normally fetch articles from your API
-                // For now, we'll just create a simple editor for the existing ones
-                
-                const articles = Array.from(element.querySelectorAll('.related-article')).map(article => {
-                    const title = article.querySelector('h4').textContent;
-                    const imageUrl = article.querySelector('.related-image').style.backgroundImage.replace(/url\(['"]?(.*?)['"]?\)/i, '$1');
-                    const category = article.querySelector('.related-category').textContent.trim();
-                    const score = article.querySelector('.related-effectiveness').textContent.trim();
                     
-                    return { title, imageUrl, category, score };
-                });
-                
-                let articlesHtml = '';
-                
-                articles.forEach((article, index) => {
-                    articlesHtml += `
-                        <div class="related-article-edit">
-                            <div class="form-group">
-                                <label>Title</label>
-                                <input type="text" class="related-title" value="${article.title}">
-                            </div>
-                            <div class="form-group">
-                                <label>Image URL</label>
-                                <input type="text" class="related-image-url" value="${article.imageUrl}">
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Category</label>
-                                    <select class="related-category">
-                                        <option value="technology" ${article.category === 'Technology' ? 'selected' : ''}>Technology</option>
-                                        <option value="business" ${article.category === 'Business' ? 'selected' : ''}>Business</option>
-                                        <option value="science" ${article.category === 'Science' ? 'selected' : ''}>Science</option>
-                                        <option value="health" ${article.category === 'Health' ? 'selected' : ''}>Health</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label>Score</label>
-                                    <input type="number" class="related-score" min="1" max="100" value="${article.score}">
-                                </div>
-                            </div>
-                            <button class="remove-related-btn">Remove</button>
-                        </div>
-                    `;
-                });
-                
-                element.innerHTML = `
-                    <div class="related-articles-editor">
-                        <div class="related-articles-list">
-                            ${articlesHtml}
-                        </div>
-                        <button class="add-related-btn">Add Related Article</button>
-                    </div>
-                `;
-                
-                // Prevent event propagation
-                element.querySelector('.related-articles-editor').addEventListener('click', e => e.stopPropagation());
-                
-                // Add article button
-                element.querySelector('.add-related-btn').addEventListener('click', e => {
-                    e.preventDefault();
-                    
-                    const newArticle = document.createElement('div');
-                    newArticle.className = 'related-article-edit';
-                    newArticle.innerHTML = `
-                        <div class="form-group">
-                            <label>Title</label>
-                            <input type="text" class="related-title" placeholder="Article Title">
-                        </div>
-                        <div class="form-group">
-                            <label>Image URL</label>
-                            <input type="text" class="related-image-url" placeholder="Image URL">
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Category</label>
-                                <select class="related-category">
-                                    <option value="technology">Technology</option>
-                                    <option value="business">Business</option>
-                                    <option value="science">Science</option>
-                                    <option value="health">Health</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Score</label>
-                                <input type="number" class="related-score" min="1" max="100" value="50">
-                            </div>
-                        </div>
-                        <button class="remove-related-btn">Remove</button>
-                    `;
-                    
-                    element.querySelector('.related-articles-list').appendChild(newArticle);
-                    
-                    // Add remove button listener
-                    newArticle.querySelector('.remove-related-btn').addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.parentElement.remove();
-                    });
-                });
-                
-                // Remove buttons
-                element.querySelectorAll('.remove-related-btn').forEach(btn => {
-                    btn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.parentElement.remove();
-                    });
-                });
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-calendar-day"></i> Daily Re-encryption';
+                } else {
+                    indicator.className = 'status-indicator inactive';
+                    title.textContent = 'Encryption Inactive';
+                    description.textContent = 'Data encryption is not currently active.';
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-calendar-day"></i> Daily Re-encryption Disabled';
+                }
             }
             
-            // Create sponsored content editor
-            function createSponsoredContentEditor(element) {
-                const title = element.querySelector('h4').textContent;
-                const description = element.querySelector('p').textContent;
-                const linkText = element.querySelector('a').textContent;
-                const linkUrl = element.querySelector('a').getAttribute('href');
-                const imageUrl = element.querySelector('.sponsored-image').style.backgroundImage.replace(/url\(['"]?(.*?)['"]?\)/i, '$1');
-                
-                element.innerHTML = `
-                    <div class="sponsored-editor">
-                        <div class="form-group">
-                            <label>Image URL</label>
-                            <input type="text" class="sponsored-image-url" value="${imageUrl}">
-                        </div>
-                        <div class="form-group">
-                            <label>Title</label>
-                            <input type="text" class="sponsored-title" value="${title}">
-                        </div>
-                        <div class="form-group">
-                            <label>Description</label>
-                            <textarea class="sponsored-description">${description}</textarea>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Button Text</label>
-                                <input type="text" class="sponsored-btn-text" value="${linkText}">
-                            </div>
-                            <div class="form-group">
-                                <label>Button URL</label>
-                                <input type="text" class="sponsored-btn-url" value="${linkUrl}">
-                            </div>
-                        </div>
-                    </div>
-                `;
-                
-                // Prevent event propagation
-                element.querySelector('.sponsored-editor').addEventListener('click', e => e.stopPropagation());
-            }
-            
-            // Create section editor
-            function createSectionEditor(element) {
-                const title = element.querySelector('h3').textContent;
-                const sectionType = element.getAttribute('data-section');
-                
-                element.innerHTML = `
-                    <div class="section-editor">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Section Title</label>
-                                <input type="text" class="section-title" value="${title}">
-                            </div>
-                            <div class="form-group">
-                                <label>Visibility</label>
-                                <select class="section-visibility">
-                                    <option value="visible" selected>Visible</option>
-                                    <option value="hidden">Hidden</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                
-                // Restore original content after the section editor
-                const originalChildren = document.createElement('div');
-                originalChildren.innerHTML = originalContent.html;
-                
-                // Remove the h3 from the content
-                const h3 = originalChildren.querySelector('h3');
-                if (h3) {
-                    h3.remove();
+            async startReencryption() {
+                if (!confirm('Are you sure you want to start re-encryption? This will temporarily lock the system.')) {
+                    return;
                 }
                 
-                // Add remaining content back
-                element.querySelector('.section-editor').appendChild(originalChildren);
-                
-                // Prevent event propagation
-                element.querySelector('.section-editor').addEventListener('click', e => e.stopPropagation());
+                try {
+                    const response = await fetch('admin.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: 'ajax_action=start_reencryption'
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.showProgressContainer();
+                        this.startProgressMonitoring();
+                    } else {
+                        alert('Failed to start re-encryption: ' + result.error);
+                    }
+                } catch (error) {
+                    console.error('Failed to start re-encryption:', error);
+                    alert('Failed to start re-encryption. Please check the console for details.');
+                }
             }
             
-            // Save changes
-            function saveChanges() {
-                if (!currentlyEditing) return;
+            showProgressContainer() {
+                const container = document.getElementById('progress-container');
+                if (container) {
+                    container.style.display = 'block';
+                }
+            }
+            
+            hideProgressContainer() {
+                const container = document.getElementById('progress-container');
+                if (container) {
+                    container.style.display = 'none';
+                }
+            }
+            
+            startStatusMonitoring() {
+                this.statusCheckInterval = setInterval(() => {
+                    this.checkReencryptionStatus();
+                }, 2000);
+            }
+            
+            startProgressMonitoring() {
+                if (this.progressInterval) {
+                    clearInterval(this.progressInterval);
+                }
                 
-                // Get the edit type and update accordingly
-                const editType = currentlyEditing.getAttribute('data-editable');
-                const fieldName = currentlyEditing.getAttribute('data-field');
-                
-                let newContent = '';
-                
-                switch (editType) {
-                    case 'text':
-                        const textInput = currentlyEditing.querySelector('input');
-                        newContent = textInput.value;
-                        currentlyEditing.innerHTML = newContent;
-                        break;
-                        
-                    case 'richtext':
-                        const textarea = currentlyEditing.querySelector('textarea');
-                        newContent = textarea.value;
-                        currentlyEditing.innerHTML = newContent;
-                        break;
-                        
-                    case 'image':
-                        const imageUrl = currentlyEditing.querySelector('.image-url').value;
-                        currentlyEditing.style.backgroundImage = `url(${imageUrl})`;
-                        currentlyEditing.innerHTML = '';
-                        break;
-                        
-                    case 'tags':
-                        const tagsInput = currentlyEditing.querySelector('.tags-input');
-                        const tags = tagsInput.value.split(',').map(tag => tag.trim()).filter(tag => tag);
-                        
-                        newContent = tags.map(tag => {
-                            return `<a href="?category=All Categories&amp;tags=${encodeURIComponent(tag)}" class="article-tag">#${tag}</a>`;
-                        }).join('\n');
-                        
-                        currentlyEditing.innerHTML = newContent;
-                        break;
-                        
-                    case 'score':
-                        const scoreValue = currentlyEditing.querySelector('.score-range').value;
-                        const scoreClass = parseInt(scoreValue) >= 100 ? 'high-effectiveness' : 
-                                        parseInt(scoreValue) >= 50 ? 'medium-effectiveness' : 
-                                        'low-effectiveness';
-                        
-                        currentlyEditing.className = `score-circle ${scoreClass}`;
-                        currentlyEditing.innerHTML = scoreValue;
-                        
-                        // Update other score references
-                        document.querySelectorAll('.score-value').forEach(el => {
-                            el.textContent = scoreValue;
-                        });
-                        break;
-                        
-                    case 'date':
-                        const dateInput = currentlyEditing.querySelector('.date-input');
-                        const dateValue = dateInput.value;
-                        
-                        // For display purposes, show relative time
-                        const date = new Date(dateValue);
-                        const now = new Date();
-                        const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-                        
-                        let displayDate = '';
-                        if (diffDays === 0) {
-                            displayDate = 'Today';
-                        } else if (diffDays === 1) {
-                            displayDate = 'Yesterday';
-                        } else {
-                            displayDate = `${diffDays} days ago`;
+                this.progressInterval = setInterval(() => {
+                    this.checkReencryptionStatus();
+                }, 1000);
+            }
+            
+            async checkReencryptionStatus() {
+                try {
+                    const response = await fetch('admin.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: 'ajax_action=get_reencryption_status'
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        if (result.progress) {
+                            this.updateProgress(result.progress);
                         }
                         
-                        currentlyEditing.textContent = displayDate;
-                        currentlyEditing.setAttribute('data-time', dateValue);
-                        break;
-                        
-                    case 'category':
-                        const categorySelect = currentlyEditing.querySelector('.category-select');
-                        const categoryValue = categorySelect.value;
-                        const categoryText = categorySelect.options[categorySelect.selectedIndex].text;
-                        
-                        currentlyEditing.className = `article-category ${categoryValue}`;
-                        currentlyEditing.textContent = categoryText;
-                        break;
-                        
-                    case 'number':
-                        const numberInput = currentlyEditing.querySelector('.number-editor');
-                        newContent = numberInput.value;
-                        currentlyEditing.innerHTML = newContent;
-                        break;
-                        
-                    case 'related':
-                        // Rebuild related articles from editor
-                        const relatedArticles = Array.from(currentlyEditing.querySelectorAll('.related-article-edit')).map(article => {
-                            const title = article.querySelector('.related-title').value;
-                            const imageUrl = article.querySelector('.related-image-url').value;
-                            const category = article.querySelector('.related-category').value;
-                            const categoryText = article.querySelector('.related-category').options[article.querySelector('.related-category').selectedIndex].text;
-                            const score = article.querySelector('.related-score').value;
+                        if (!result.locked && this.progressInterval) {
+                            // Re-encryption completed
+                            clearInterval(this.progressInterval);
+                            this.progressInterval = null;
                             
-                            // Determine effectiveness class
-                            const effectivenessClass = parseInt(score) >= 100 ? 'high-effectiveness' : 
-                                                    parseInt(score) >= 50 ? 'medium-effectiveness' : 
-                                                    'low-effectiveness';
-                            
-                            return `
-                                <div class="related-article">
-                                    <a href="?article=${encodeURIComponent(title.toLowerCase().replace(/\s+/g, '-'))}">
-                                        <div class="related-image gradient-overlay" style="background-image: url('${imageUrl}')"></div>
-                                        <div class="related-info">
-                                            <h4>${title}</h4>
-                                            <div class="related-meta">
-                                                <span class="related-category ${category}">${categoryText}</span>
-                                                <span class="related-effectiveness ${effectivenessClass}">${score}</span>
-                                            </div>
-                                        </div>
-                                    </a>
-                                </div>
-                            `;
-                        }).join('');
-                        
-                        currentlyEditing.innerHTML = relatedArticles;
-                        break;
-                        
-                    case 'sponsored':
-                        const sponsoredTitle = currentlyEditing.querySelector('.sponsored-title').value;
-                        const sponsoredDescription = currentlyEditing.querySelector('.sponsored-description').value;
-                        const sponsoredBtnText = currentlyEditing.querySelector('.sponsored-btn-text').value;
-                        const sponsoredBtnUrl = currentlyEditing.querySelector('.sponsored-btn-url').value;
-                        const sponsoredImageUrl = currentlyEditing.querySelector('.sponsored-image-url').value;
-                        
-                        currentlyEditing.innerHTML = `
-                            <div class="sponsored-image gradient-overlay" style="background-image: url('${sponsoredImageUrl}')"></div>
-                            <h4>${sponsoredTitle}</h4>
-                            <p>${sponsoredDescription}</p>
-                            <a href="${sponsoredBtnUrl}" class="sponsored-link">${sponsoredBtnText}</a>
-                        `;
-                        break;
-                        
-                    case 'section':
-                        const sectionTitle = currentlyEditing.querySelector('.section-title').value;
-                        const sectionVisibility = currentlyEditing.querySelector('.section-visibility').value;
-                        
-                        if (sectionVisibility === 'hidden') {
-                            currentlyEditing.style.display = 'none';
-                        } else {
-                            currentlyEditing.style.display = '';
+                            setTimeout(() => {
+                                this.hideProgressContainer();
+                                this.loadEncryptionStatus();
+                            }, 3000);
                         }
-                        
-                        // Keep original content but update the title
-                        const sectionContent = currentlyEditing.innerHTML;
-                        currentlyEditing.innerHTML = originalContent.html;
-                        currentlyEditing.querySelector('h3').textContent = sectionTitle;
-                        break;
-                }
-                
-                // Get the field name and value to send to the server
-                // In a real implementation, you'd save this to your database
-                console.log('Saved:', fieldName, newContent);
-                
-                // Reset editing state
-                currentlyEditing.classList.remove('editing');
-                currentlyEditing = null;
-                
-                // Hide toolbar
-                const toolbar = document.querySelector('.edit-toolbar');
-                if (toolbar) {
-                    toolbar.classList.add('hidden');
-                }
-                
-                // Show save notification
-                showNotification('Changes saved successfully!');
-            }
-            
-            // Cancel editing
-            function cancelEditing() {
-                if (!currentlyEditing) return;
-                
-                // Restore original content
-                currentlyEditing.innerHTML = originalContent.html;
-                
-                // Reset editing state
-                currentlyEditing.classList.remove('editing');
-                currentlyEditing = null;
-                
-                // Hide toolbar
-                const toolbar = document.querySelector('.edit-toolbar');
-                if (toolbar) {
-                    toolbar.classList.add('hidden');
+                    }
+                } catch (error) {
+                    console.error('Failed to check status:', error);
                 }
             }
             
-            // Show notification
-            function showNotification(message, type = 'success') {
-                const notification = document.createElement('div');
-                notification.className = `edit-notification ${type}`;
-                notification.textContent = message;
-                document.body.appendChild(notification);
+            updateProgress(progress) {
+                const fill = document.getElementById('progress-fill');
+                const percentage = document.getElementById('progress-percentage');
+                const message = document.getElementById('progress-message');
                 
-                // Auto-remove after 3 seconds
-                setTimeout(() => {
-                    notification.classList.add('fade-out');
-                    setTimeout(() => {
-                        document.body.removeChild(notification);
-                    }, 300);
-                }, 3000);
+                if (fill) {
+                    fill.style.width = Math.min(100, Math.max(0, progress.percentage || 0)) + '%';
+                }
+                
+                if (percentage) {
+                    percentage.textContent = Math.round(progress.percentage || 0) + '%';
+                }
+                
+                if (message) {
+                    message.textContent = progress.message || 'Processing...';
+                }
             }
         }
-
-        // Initialize the article editor when the DOM is ready
+        
+        // Initialize when DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
-            initArticleEditor();
+            new EncryptionManager();
         });
     </script>
     <?php endif; ?>
